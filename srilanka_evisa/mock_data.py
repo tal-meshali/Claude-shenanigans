@@ -38,6 +38,7 @@ class MockPerson:
     occupation: str
     title: str
     relationship: str = ""
+    children: tuple[dict, ...] = ()  # on this passport (applicants.yaml `children` entries)
 
     @property
     def expiry_date(self) -> date:
@@ -48,7 +49,8 @@ MOCK_PEOPLE = [
     MockPerson("Dupont", "Jean Pierre", "M", date(1984, 3, 14), "FRA", "Lyon", "24FR81234",
                date(2024, 2, 1), "Engineer", "MR", "Self"),
     MockPerson("Dupont", "Marie Claire", "F", date(1987, 11, 2), "FRA", "Marseille", "23FR55120",
-               date(2023, 6, 20), "Teacher", "MRS", "Spouse"),
+               date(2023, 6, 20), "Teacher", "MRS", "Spouse",
+               children=({"given_names": "Emma", "date_of_birth": "2021-04-18", "sex": "F"},)),
     MockPerson("Dupont", "Lucas", "M", date(2014, 7, 30), "FRA", "Paris", "25FR00731",
                date(2025, 1, 9), "Student", "MASTER", "Child"),
 ]
@@ -160,6 +162,7 @@ def generate(out_dir: str | Path, people: list[MockPerson] | None = None, arriva
             "relationship": p.relationship,
             "passport_image": f"passports/{slug}.png",
             "photo": f"photos/{slug}.jpg",
+            **({"children": [dict(c) for c in p.children]} if p.children else {}),
         })
 
     arrival = date.today() + timedelta(days=arrival_in_days)

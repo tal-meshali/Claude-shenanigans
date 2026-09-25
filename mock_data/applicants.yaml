@@ -43,6 +43,10 @@ beneficiaries:
   relationship: Spouse
   passport_image: passports/dupont_marie.png
   photo: photos/dupont_marie.jpg
+  children:
+  - given_names: Emma
+    date_of_birth: '2021-04-18'
+    sex: F
 - mrz: |-
     P<FRADUPONT<<LUCAS<<<<<<<<<<<<<<<<<<<<<<<<<<
     25FR007312FRA1407307M3501081<<<<<<<<<<<<<<02

@@ -8,7 +8,8 @@
 #
 # Mapped from the live site on 2026-09-25 (snapshots in mock_site/portal_snapshot/):
 #   VERIFIED    terms page, category page, individual form, group trip/contact form,
-#               group member form, review pages (live dry runs 2026-09-25)
+#               group member form, children on a parent's passport (both forms),
+#               review pages (live dry runs 2026-09-25/26)
 #   UNVERIFIED  payment options, gateway - those
 #               pages only appear after submitting real data. They use generic
 #               selectors + text matching; check them on your first --headful run.
@@ -147,6 +148,19 @@ steps:
       confirm_info: &conf
         kind: checkbox
         selectors: ["input[name='conf']"]
+    # "Child information in parent's passport": tick Enable, fill, "Add Child" - once
+    # per child. The child is listed on the same page (hidden input #Val<n>).
+    children:
+      fields:
+        enable: {kind: checkbox, selectors: ["#redDep"]}
+        surname: {selectors: ["#dSurname"]}
+        given_names: {selectors: ["#dOthernames"]}
+        date_of_birth: {selectors: ["#dDobDate"]}
+        date_of_birth_confirm: {selectors: ["#reEnteredDDobDate"]}
+        sex: {selectors: ["#dGender"], value_map: *genders}
+        relationship: {selectors: ["#relationship"]}
+      add: {selectors: ["#btnAddDep"]}
+      added: "#Val{n}"
     next:
       selectors: ["#submitButton"]
       texts: ["^\\s*Next\\s*$"]
@@ -204,6 +218,19 @@ steps:
       q_currently_in_sri_lanka: *q2
       q_multiple_entry_visa: *q3
       confirm_info: {kind: checkbox, selectors: ["#idConfTick"]}
+    # Children on this member's passport: after the member's own fields (Enable
+    # checks them), tick Enable, fill, "Include" - once per child, before "Add Member".
+    children:
+      fields:
+        enable: {kind: checkbox, selectors: ["#idEnableDepInfo"]}
+        surname: {selectors: ["#idDSurname"]}
+        given_names: {selectors: ["#idDOthernames"]}
+        date_of_birth: {selectors: ["#idDDobDate"]}
+        date_of_birth_confirm: {selectors: ["#idReEnteredDDobDate"]}
+        sex: {selectors: ["#idDGender"], value_map: *genders}
+        relationship: {selectors: ["#idDRelationship"]}
+      add: {selectors: ["#idAddDependent"]}
+      added: "#thiddenDSurname{n}"  # numbered per member
     add:
       selectors: ["#idAddMember"]
       texts: ["^\\s*Add Member\\s*$"]

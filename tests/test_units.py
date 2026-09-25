@@ -41,6 +41,17 @@ def test_validation_catches_short_passport_validity(tmp_path):
     assert any("6 months" in p for p in app.validate())
 
 
+def test_children_on_a_parents_passport(tmp_path):
+    path = generate(tmp_path)
+    app = load_application(path)
+    [emma] = app.beneficiaries[1].children
+    assert (emma.given_names, emma.surname, emma.sex) == ("EMMA", "DUPONT", "F")  # surname from the parent
+    assert emma.date_of_birth == date(2021, 4, 18) and not app.validate()
+
+    path.write_text(path.read_text().replace("2021-04-18", str(date.today().replace(year=date.today().year - 16))))
+    assert any("16 or older" in p for p in load_application(path).validate())
+
+
 def test_card_validation_and_masking():
     assert luhn_ok("4111111111111111") and not luhn_ok("4111111111111112")
     card = CardDetails(number="4111 1111 1111 1111", expiry_month=12, expiry_year=date.today().year % 100 + 2,

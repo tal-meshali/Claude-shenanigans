@@ -16,7 +16,7 @@ from playwright.sync_api import BrowserContext, Dialog, Page, Response, sync_pla
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from .forms import FieldNotFound, click, fill_fields, locate
-from .models import Application, Beneficiary
+from .models import Application, Beneficiary, Child
 from .payment import CardDetails, PaymentOutcome, pay_on_gateway
 
 DEFAULT_PROFILE = Path(__file__).parent / "profiles" / "eta_gov_lk.yaml"
@@ -64,6 +64,18 @@ def beneficiary_values(b: Beneficiary) -> dict[str, Any]:
         "passport_number_confirm": b.passport_number,
         "passport_issue_date": b.passport_issue_date,
         "passport_expiry_date": b.passport_expiry_date,
+    }
+
+
+def child_values(c: Child) -> dict[str, Any]:
+    return {
+        "enable": True,
+        "surname": c.surname,
+        "given_names": c.given_names,
+        "date_of_birth": c.date_of_birth,
+        "date_of_birth_confirm": c.date_of_birth,
+        "sex": c.sex,
+        "relationship": "Child",
     }
 
 
@@ -201,6 +213,7 @@ class EtaAutomation:
             values = {**beneficiary_values(members[0]), **trip_values(app), **declaration_values(app)}
             filled = fill_fields(page, step["fields"], values, fmt)
             self.log(f"[{tag}]  application form: {len(filled)} fields")
+            self._add_children(page, step, members[0], tag, result)
             self._snapshot(page, f"{tag}-form", result)
             self._click_and_wait(page, step["next"], "next", tag, result)
         else:
@@ -216,6 +229,7 @@ class EtaAutomation:
                 self._dialogs.clear()  # a refused passport number shows up as an alert
                 filled = fill_fields(page, step["fields"], values, fmt)
                 self.log(f"[{tag}]  member {i}/{len(members)} {member.full_name}: {len(filled)} fields")
+                self._add_children(page, step, member, tag, result)
                 self._click_and_expect(page, step["add"], step["added"].format(n=i), f"add member {i}", tag, result)
             self._click_and_wait(page, step["next"], "next (members)", tag, result)
 
@@ -312,6 +326,18 @@ class EtaAutomation:
         page.wait_for_load_state()
         self._keep_https(page)
         self._check_fatal(page)
+
+    def _add_children(self, page: Page, step: dict[str, Any], parent: Beneficiary, tag: str,
+                      result: SessionResult) -> None:
+        """Add the children travelling on `parent`'s passport, one at a time."""
+        spec = step.get("children")
+        if parent.children and not spec:
+            raise StepError("this form has no section for children on a parent's passport")
+        for n, child in enumerate(parent.children, 1):
+            fill_fields(page, spec["fields"], child_values(child), self.profile["date_format"])
+            self._click_and_expect(page, spec["add"], spec["added"].format(n=n), f"add child {child.full_name}",
+                                   tag, result)
+            self.log(f"[{tag}]    child on {parent.given_names}'s passport: {child.full_name}")
 
     def _click_and_expect(self, page: Page, spec: dict[str, Any], selector: str, what: str, tag: str,
                           result: SessionResult) -> None:

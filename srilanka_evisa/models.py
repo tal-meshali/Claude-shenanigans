@@ -28,6 +28,22 @@ def _to_date(value: Any, name: str) -> date:
         raise ValidationError(f"{name}: expected YYYY-MM-DD, got {value!r}") from exc
 
 
+CHILD_AGE_LIMIT = 16  # older children need their own passport and application
+
+
+@dataclass
+class Child:
+    """A child travelling on the beneficiary's passport (the portal's "Child information")."""
+    given_names: str
+    date_of_birth: date
+    sex: str  # "M" / "F"
+    surname: str = ""  # default: the parent's surname
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.given_names} {self.surname}"
+
+
 @dataclass
 class Beneficiary:
     surname: str
@@ -44,6 +60,7 @@ class Beneficiary:
     occupation: str = ""
     relationship: str = ""  # for group members, e.g. "Spouse", "Child"
     country_of_address: str = ""  # ISO3 country the traveller lives in (default: the contact's country)
+    children: list[Child] = field(default_factory=list)  # children on this passport, under 16
     passport_image: Path | None = None  # scan of the passport bio page (source of the MRZ)
     photo: Path | None = None  # passport-style photo, for portals that ask for one
 
@@ -134,11 +151,40 @@ class Application:
             # Sri Lanka requires at least 6 months of passport validity on arrival.
             if b.passport_expiry_date < self.trip.arrival_date + timedelta(days=183):
                 problems.append(f"{who}: passport must be valid 6 months beyond arrival")
+            for c in b.children:
+                if c.sex not in ("M", "F"):
+                    problems.append(f"{who}: child {c.full_name}: sex must be 'M' or 'F'")
+                if c.date_of_birth >= today:
+                    problems.append(f"{who}: child {c.full_name}: date_of_birth must be in the past")
+                elif _age(c.date_of_birth, today) >= CHILD_AGE_LIMIT:
+                    problems.append(f"{who}: child {c.full_name} is {CHILD_AGE_LIMIT} or older and needs "
+                                    "their own passport and application")
             for attr in ("passport_image", "photo"):
                 path = getattr(b, attr)
                 if path is not None and not Path(path).is_file():
                     problems.append(f"{who}: {attr} file not found: {path}")
         return problems
+
+
+def _age(born: date, on: date) -> int:
+    return on.year - born.year - ((on.month, on.day) < (born.month, born.day))
+
+
+def _child_from_dict(raw: dict[str, Any], parent_surname: str) -> Child:
+    raw = dict(raw)
+    known = {f.name for f in fields(Child)}
+    unknown = set(raw) - known
+    if unknown:
+        raise ValidationError(f"unknown child field(s): {', '.join(sorted(unknown))}")
+    missing = [f.name for f in fields(Child) if f.default is MISSING and f.name not in raw]
+    if missing:
+        raise ValidationError(f"missing child field(s): {', '.join(missing)}")
+    return Child(
+        given_names=str(raw["given_names"]).upper().strip(),
+        surname=str(raw.get("surname") or parent_surname).upper().strip(),
+        date_of_birth=_to_date(raw["date_of_birth"], "child date_of_birth"),
+        sex=str(raw["sex"]).upper()[:1],
+    )
 
 
 def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
@@ -170,7 +216,8 @@ def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
     unknown = set(raw) - known
     if unknown:
         raise ValidationError(f"unknown beneficiary field(s): {', '.join(sorted(unknown))}")
-    missing = [f.name for f in fields(Beneficiary) if f.default is MISSING and f.name not in raw]
+    missing = [f.name for f in fields(Beneficiary)
+               if f.default is MISSING and f.default_factory is MISSING and f.name not in raw]
     if missing:
         raise ValidationError(f"missing beneficiary field(s): {', '.join(missing)}")
 
@@ -185,6 +232,7 @@ def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
         raw[key] = str(raw[key]).upper().strip()
     for key in ("nationality", "country_of_birth", "passport_issuing_country", "country_of_address"):
         raw[key] = str(raw.get(key, "")).upper()
+    raw["children"] = [_child_from_dict(c, raw["surname"]) for c in raw.get("children") or []]
     return Beneficiary(**raw)
 
 

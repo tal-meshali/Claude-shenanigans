@@ -10,7 +10,8 @@ from urllib.parse import parse_qs
 import pytest
 from playwright.sync_api import sync_playwright
 
-from srilanka_evisa.automation import beneficiary_values, declaration_values, load_profile, trip_values
+from srilanka_evisa.automation import (beneficiary_values, child_values, declaration_values, load_profile,
+                                       trip_values)
 from srilanka_evisa.forms import fill_fields, locate
 from srilanka_evisa.mock_data import generate
 from srilanka_evisa.models import load_application
@@ -54,7 +55,8 @@ def open_fixture(browser):
                 return route.fulfill(content_type="application/javascript", body=(
                     f"var {obj} = new Proxy({{}}, {{get: (t, method) => function () {{"
                     " var cb = arguments[arguments.length - 1];"
-                    " var answer = method === 'getActivParameters' ? [{code: 'GMEM', value: 10}] : null;"
+                    " var answer = method === 'getActivParameters'"
+                    " ? [{code: 'GMEM', value: 10}, {code: 'MDEP', value: 5}] : null;"
                     " if (typeof cb === 'function') setTimeout(() => cb(answer), 50); }});"))
             return route.abort()
 
@@ -79,6 +81,15 @@ def _values(page, ids):
         const e = document.getElementById(id);
         return [id, e.type === 'checkbox' || e.type === 'radio' ? e.checked : e.value];
     }))""", ids)
+
+
+def _add_children(page, step, parent, date_format):
+    """What EtaAutomation._add_children does: fill the child section and add, once per child."""
+    spec = step["children"]
+    for n, child in enumerate(parent.children, 1):
+        assert set(fill_fields(page, spec["fields"], child_values(child), date_format)) == set(spec["fields"])
+        locate(page, spec["add"]).click()
+        page.wait_for_selector(spec["added"].format(n=n), state="attached", timeout=5000)
 
 
 def test_terms_page_agree_radio(open_fixture):
@@ -160,6 +171,7 @@ def test_group_member_form_adds_every_member(open_fixture, app):
         values = {**beneficiary_values(member), **declaration_values(app), "country_of_address": app.contact.country}
         filled = fill_fields(page, step["fields"], values, profile["date_format"])
         assert set(filled) == set(step["fields"])
+        _add_children(page, step, member, profile["date_format"])
         locate(page, step["add"]).click()
         page.wait_for_selector(step["added"].format(n=i), state="attached", timeout=5000)
         assert page.locator("#idSurname").input_value() == ""  # the portal clears the form for the next one
@@ -175,6 +187,11 @@ def test_group_member_form_adds_every_member(open_fixture, app):
     assert posted["hiddenPassExDate"][0] == "01-31-2034"
     assert sorted(posted["otherDecQuesAns"]) == sorted(
         f"{n}|QN{q}|0" for n in posted["hiddenPassportNo"] for q in (1, 2, 3))  # three "No" answers each
+    # Emma, on her mother's (member 2) passport
+    assert posted["hiddenDPassportNo"] == ["23FR55120"] and posted["hiddenDMemberNo"] == ["2"]
+    assert (posted["hiddenDSurname"], posted["hiddenDOtherNames"]) == (["DUPONT"], ["EMMA"])
+    assert posted["hiddenDDobDate"] == ["04-18-2021"] and posted["hiddenDGender"] == ["F"]
+    assert posted["hiddenDRealationShip"] == ["03"]
     assert not [a for a in page.alerts if "maximum number of members" not in a]
 
 
@@ -191,3 +208,21 @@ def test_review_confirm_button(open_fixture, fixture, actiontype, dialogs):
     [posted] = page.posts  # captured locally, never sent
     assert posted["actiontype"] == [actiontype]
     assert len(page.alerts) == dialogs and "Are you sure to confirm" in page.alerts[0]
+
+
+def test_individual_form_adds_child_on_parents_passport(open_fixture, app):
+    page = open_fixture("eta_individual_form.html")
+    profile = load_profile()
+    step = profile["steps"]["individual_form"]
+    mother = app.beneficiaries[1]
+    fill_fields(page, step["fields"], {**beneficiary_values(mother), **trip_values(app), **declaration_values(app)},
+                profile["date_format"])
+    _add_children(page, step, mother, profile["date_format"])
+    assert page.locator("#dSurname").input_value() == ""  # cleared for the next child
+
+    locate(page, step["next"]).click()
+    page.wait_for_timeout(1500)
+    [posted] = page.posts
+    assert posted["depValues"] == ["DUPONT|EMMA|04-18-2021|Female|03"]  # 03 = Child
+    assert posted["passportno"] == ["23FR55120"]
+    assert not [a for a in page.alerts if "valid for 30 days" not in a]

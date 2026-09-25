@@ -75,6 +75,8 @@ def test_group_application_returns_payment_link(base_url, app, tmp_path):
     assert members[0]["dob"] == "03-14-1984" and members[0]["passExp"] == "01-31-2034"
     assert members[1]["title"] == "02" and members[1]["gender"] == "F"  # MRS, Female
     assert members[2]["nationality"] == members[2]["coa"] == "FRA"
+    assert [c["othernames"] for c in members[1]["children"]] == ["EMMA"]  # on her mother's passport
+    assert members[1]["children"][0]["dob"] == "04-18-2021" and not members[0]["children"]
     # The review page's confirm() dialog was accepted and recorded.
     assert any("Are you sure to confirm" in m for m in result.site_messages)
     saved = json.loads((tmp_path / "out" / "results.json").read_text())
@@ -91,6 +93,8 @@ def test_individual_applications_are_paid_with_one_card(base_url, app, tmp_path)
     assert all(payments[r.reference]["status"] == "paid" for r in results)
     assert all(payments[r.reference]["amount"] == 50 for r in results)
 
+    mother = _session(base_url, results[1].reference)["members"][0]
+    assert [c["othernames"] for c in mother["children"]] == ["EMMA"]
     first = _session(base_url, results[0].reference)["members"][0]
     assert first["surname"] == "DUPONT" and first["bdate"] == "03-14-1984"
     assert first["national"] == "FRA|FRANCE (FRA)" and first["QN1"] == "0"

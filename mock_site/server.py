@@ -174,6 +174,9 @@ class Handler(BaseHTTPRequestHandler):
                              "addinsl", "email", "telephon")}
                 s["members"] = [{k: f.get(k, "") for k in ("title", "surname", "othernames", "bdate", "gender",
                                  "national", "conbirth", "passportno", "pidate", "pedate", "QN1", "QN2", "QN3")}]
+                # "Add Child" rows: depValues = "SURNAME|OTHER NAMES|mm-dd-yyyy|Gender|Relationship"
+                s["members"][0]["children"] = [dict(zip(("surname", "othernames", "dob", "gender", "relationship"),
+                                                        v.split("|"))) for v in self.form_lists.get("depValues", [])]
                 s["status"] = "review"
                 return self.snapshot("eta_individual_review.html", sid)
             if "conAddOne" in f and s.get("app_type") == "GROUP":
@@ -242,16 +245,26 @@ class Handler(BaseHTTPRequestHandler):
                      "coa": "hiddenCoa", "occupation": "hiddenOccupation", "passportNo": "hiddenPassportNo",
                      "dob": "hiddenDobDate", "passIssue": "hiddenPassIssueDate", "passExp": "hiddenPassExDate"}
 
+    CHILD_FIELDS = {"parentPassportNo": "hiddenDPassportNo", "surname": "hiddenDSurname",
+                    "othernames": "hiddenDOtherNames", "dob": "hiddenDDobDate", "gender": "hiddenDGender",
+                    "relationship": "hiddenDRealationShip"}
+
+    def _rows(self, names: dict[str, str], key: str) -> list[dict[str, str]]:
+        cols = {k: self.form_lists.get(v, []) for k, v in names.items()}
+        return [{k: col[i] if i < len(col) else "" for k, col in cols.items()} for i in range(len(cols[key]))]
+
     def group_members(self) -> list[dict[str, str]]:
-        cols = {k: self.form_lists.get(v, []) for k, v in self.MEMBER_FIELDS.items()}
-        return [{k: col[i] if i < len(col) else "" for k, col in cols.items()}
-                for i in range(len(cols["passportNo"]))]
+        members = self._rows(self.MEMBER_FIELDS, "passportNo")
+        children = self._rows(self.CHILD_FIELDS, "parentPassportNo")
+        for m in members:  # each child row carries its parent's passport number
+            m["children"] = [c for c in children if c["parentPassportNo"] == m["passportNo"]]
+        return members
 
     def validate_members(self, members: list[dict[str, str]]) -> str:
         if not 1 <= len(members) <= GROUP_MAX:
             return f"a group has 1 to {GROUP_MAX} members, got {len(members)}"
         for m in members:
-            missing = [k for k, v in m.items() if k != "occupation" and v in ("", "0X")]
+            missing = [k for k, v in m.items() if k not in ("occupation", "children") and v in ("", "0X")]
             if missing:
                 return f"member {m['passportNo']}: missing {missing}"
             dates = [parse_mdy(m[k]) for k in ("dob", "passIssue", "passExp")]

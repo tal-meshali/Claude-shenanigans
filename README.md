@@ -63,10 +63,19 @@ beneficiaries:
     passport_issue_date: 2024-02-01
     occupation: Engineer
     country_of_address: FRA   # where they live; defaults to contact.country
+    children:                 # children under 16 on this passport (no passport of their own)
+      - given_names: Emma
+        date_of_birth: 2021-04-18
+        sex: F
+        # surname: ...        # defaults to the parent's surname
 ```
 
+A child with their own passport is a traveller (a `beneficiaries` entry) instead;
+children on a parent's passport are added in the parent's "Child information"
+section, in both group and individual applications.
+
 The file is validated before a browser starts (email, arrival date, 30/90 visa
-days, passport valid 6 months after arrival, …). Countries are ISO-3 codes.
+days, passport valid 6 months after arrival, children under 16, …). Countries are ISO-3 codes.
 
 ## Payment
 
@@ -91,6 +100,9 @@ Mapped from the live site on 2026-09-25 (snapshots in `mock_site/portal_snapshot
   member in the browser, lists them on the same page and clears the form; the "Next"
   button it then shows posts the whole group. It also asks for each member's
   *Country of Address*.
+* **Children on a parent's passport** – same idea one level down: tick *Enable*, fill
+  the child, "Add Child" (individual) / "Include" (group member, before "Add Member"),
+  once per child.
 * **Server-side passport check** – after the passport number is typed the portal
   asks its server whether it is acceptable; the run waits for that before moving on
   and reports the portal's message if it refuses.
@@ -106,7 +118,7 @@ Mapped from the live site on 2026-09-25 (snapshots in `mock_site/portal_snapshot
 
 | Part | Status |
 |---|---|
-| Terms, category, **individual form**, **group travel & contact form**, **group member form**, **review pages** (group and individual) | Driven on the live portal in dry runs (2026-09-25), and filled on the saved real pages **with the portal's own JavaScript**; its validation accepts the result (`tests/test_real_markup.py`) |
+| Terms, category, **individual form**, **group travel & contact form**, **group member form**, **children on a parent's passport**, **review pages** (group and individual) | Driven on the live portal in dry runs (2026-09-25/26), and filled on the saved real pages **with the portal's own JavaScript**; its validation accepts the result (`tests/test_real_markup.py`) |
 | Payment options, gateway | **Not verified** – these pages only appear after confirming a real application. Built from text matching; check them on the first `--submit` run |
 
 All selectors live in [`srilanka_evisa/profiles/eta_gov_lk.yaml`](srilanka_evisa/profiles/eta_gov_lk.yaml);
