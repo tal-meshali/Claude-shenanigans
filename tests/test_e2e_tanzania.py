@@ -32,7 +32,8 @@ def test_every_beneficiary_gets_an_application_and_a_payment_link(tmp_path, tanz
         assert r.payment_link.gateway_url.startswith(tanzania_env.gateway.base_url + "/checkout/")
         assert r.payment_link.portal_url.endswith("/continueapplication?ReturnUrl=/payment")
         assert r.payment_link.resume["Application ID"] == r.application_id
-        assert r.payment_link.resume["Security answer"] == "Specimen Elementary"
+        assert r.payment_link.resume["Security answer"] == "Specimen Kid"
+        assert r.payment_link.resume["Security question"] == "What was your childhood nickname?"
 
     dana, _, maya, sam = _apps(tanzania_env, report.results)
     assert dana["status"] == "Submitted - awaiting payment"
@@ -58,7 +59,9 @@ def test_card_is_asked_once_and_every_application_is_paid(tmp_path, tanzania_env
     assert len(asked) == 1 and len(confirmed) == 1  # one prompt, one up-front confirmation of the total
     assert str(confirmed[0][1]) == "USD 150.00"  # 50 ordinary + 100 multiple-entry
     assert all(r.payment.reference.startswith("TZR-") for r in report.results)
-    assert [a["payment"]["last4"] for a in _apps(tanzania_env, report.results)] == ["1111", "1111"]
+    apps = _apps(tanzania_env, report.results)
+    assert [a["payment"]["last4"] for a in apps] == ["1111", "1111"]
+    assert [a["status"] for a in apps] == ["Under processing"] * 2  # submitted after payment, as the guidelines ask
     text = (Path(report.run_dir) / "report.json").read_text()
     assert "4111111111111111" not in text and "checkout-page" not in text  # no card data, no card-form screenshots
 

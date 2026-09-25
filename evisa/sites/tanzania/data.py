@@ -1,8 +1,9 @@
 """Tanzania e-visa reference data (Tanzania Immigration Services Department).
 
-Fees and visa categories are the ones published for the online portal; the
-portal shows the authoritative amount on its payment tab and the automation
-asks again before paying if the two differ.
+Fees and visa categories follow the portal's published guidelines
+(https://visa.immigration.go.tz/guidelines, section 12 "Visa fees"); the
+payment tab shows the authoritative amount and the automation asks again
+before paying if the two differ.
 """
 
 from __future__ import annotations
@@ -89,4 +90,7 @@ def port_labels(port: str) -> list[str]:
     return [port]
 
 
-DEFAULT_SECURITY_QUESTION = "What is the name of your first school?"
+# The portal's questions (observed September 2026, spelling as on the site):
+#   "In what city/town/village you were  born?", "what is the name of the hospital you ware born?",
+#   "what is the name of the street you grew up?", "What was your childhood nickname?"
+DEFAULT_SECURITY_QUESTION = "What was your childhood nickname?"

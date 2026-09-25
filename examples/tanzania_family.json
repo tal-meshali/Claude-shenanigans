@@ -20,8 +20,8 @@
   },
   "extra": {
     "tanzania": {
-      "security_question": "What is the name of your first school?",
-      "security_answer": "Specimen Elementary"
+      "security_question": "What was your childhood nickname?",
+      "security_answer": "Specimen Kid"
     }
   },
   "applicants": [
@@ -45,7 +45,12 @@
       "contact": {
         "email": "dana.specimen@example.com",
         "phone": "+972501234567",
-        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+        "address": {
+          "line1": "1 Example Street",
+          "city": "Tel Aviv",
+          "postal_code": "6100001",
+          "country": "ISR"
+        }
       },
       "occupation": "Software Engineer",
       "marital_status": "married",
@@ -72,7 +77,12 @@
       "contact": {
         "email": "omer.specimen@example.com",
         "phone": "+972527654321",
-        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+        "address": {
+          "line1": "1 Example Street",
+          "city": "Tel Aviv",
+          "postal_code": "6100001",
+          "country": "ISR"
+        }
       },
       "occupation": "Architect",
       "marital_status": "married"
@@ -97,7 +107,12 @@
       "contact": {
         "email": "dana.specimen@example.com",
         "phone": "+972501234567",
-        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+        "address": {
+          "line1": "1 Example Street",
+          "city": "Tel Aviv",
+          "postal_code": "6100001",
+          "country": "ISR"
+        }
       },
       "occupation": "Student",
       "marital_status": "single",
@@ -124,11 +139,20 @@
       "contact": {
         "email": "sam.specimen@example.com",
         "phone": "+16175550123",
-        "address": {"line1": "100 Sample Ave", "city": "Boston", "state": "MA", "postal_code": "02101", "country": "USA"}
+        "address": {
+          "line1": "100 Sample Ave",
+          "city": "Boston",
+          "state": "MA",
+          "postal_code": "02101",
+          "country": "USA"
+        }
       },
       "occupation": "Teacher",
       "marital_status": "single",
-      "trip": {"departure_country": "USA", "departure_city": "Boston"}
+      "trip": {
+        "departure_country": "USA",
+        "departure_city": "Boston"
+      }
     }
   ]
 }

@@ -10,3 +10,4 @@ dist/
 # Run artefacts: screenshots, reports (contain application IDs and security answers)
 runs/
 evisa_output/
+examples/mock_documents/

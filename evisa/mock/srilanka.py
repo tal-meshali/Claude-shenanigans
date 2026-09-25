@@ -153,7 +153,9 @@ class MockSriLankaPortal(MockApp):
         return "".join([
             "<tr><td colspan='2' class='sec'>Travel Information</td></tr>",
             r("Where you have been during last 14 days before this travel", self._select("fromDeparture", COUNTRIES, placeholder="[Select Departure Country]")),
-            r("Visa Required Days ", self._select("RequestedVisaDays", [("30", "30"), ("90", "90")])),
+            r("Visa Required Days ", "<select name='RequestedVisaDays' id='RequestedVisaDays'><option value='0X'>[Select Please]</option>"
+                                     "<option id='twentyDays' value='30'>30 </option>"
+                                     "<option id='nintydays' style='display: none' value='90'>90 </option></select>"),
             r("Intended Arrival Date", arrival),
             r("Purpose of Visit", self._select("puofvisit", PURPOSES)),
             r("Port of Departure", self._input("depcity"), required=False),

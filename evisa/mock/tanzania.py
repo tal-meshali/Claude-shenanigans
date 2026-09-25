@@ -1,11 +1,13 @@
 """Local stand-in for https://visa.immigration.go.tz, used for demos and tests.
 
-It follows the flow the Immigration Department documents (start page with
-security question and CAPTCHA, Application ID, five tabs, resume via
-/continueapplication?ReturnUrl=/payment, card payment on an external checkout)
-and deliberately mixes markup styles (radios, readonly datepickers, native date
+/start and /continueapplication mirror the live forms (field names, labels,
+security questions and country spellings observed in September 2026). The
+tabs behind them follow the Immigration Department's guidelines (Personal,
+Travel, Attachments, Declaration, Payment; card payment on an external
+checkout; "upon successful payment, submit your application") and
+deliberately mix markup styles (radios, readonly datepickers, native date
 inputs, unlabeled inputs, uploads that reject ".jpg") so the automation's
-fallbacks are exercised. It is not a copy of the real portal's HTML.
+fallbacks are exercised. They are not copies of the real tabs.
 """
 
 from __future__ import annotations
@@ -21,12 +23,12 @@ from ..sites.tanzania.data import PORTS_OF_ENTRY
 from .gateway import MockCardGateway
 from .server import MockApp, Request, Response, esc, with_query
 
+# As on the live portal, including its spelling.
 SECURITY_QUESTIONS = [
-    "What is your mother's maiden name?",
-    "What was the name of your first pet?",
-    "What is the name of your first school?",
-    "In which city were you born?",
-    "What is your favourite colour?",
+    "In what city/town/village you were  born?",
+    "what is the name of the hospital you ware born?",
+    "what is the name of the street you grew up?",
+    "What was your childhood nickname?",
 ]
 VISA_TYPES = {"1": ("Ordinary Visa", Decimal(50)), "2": ("Multiple Entry Visa", Decimal(100)),
               "3": ("Business Visa", Decimal(250)), "4": ("Transit Visa", Decimal(30))}
@@ -38,14 +40,16 @@ TABS = [("personal", "Personal Information"), ("travel", "Travel Information"), 
         ("declaration", "Declaration"), ("payment", "Payment")]
 UPLOADS = {
     "PassportBioPage": ("Passport Bio Data Page (JPEG/PNG, max 300 KB)", ("jpeg", "png"), 300),
-    "Photo": ("Passport Size Photo (JPEG/PNG, max 300 KB)", ("jpeg", "png"), 300),
+    "Photo": ("Passport Size Photo (JPEG, max 500 KB)", ("jpeg",), 500),
     "ReturnTicket": ("Return Ticket (PDF, max 1 MB)", ("pdf",), 1024),
     "HotelBooking": ("Hotel Booking / Invitation Letter (PDF/JPEG/PNG, max 1 MB)", ("pdf", "jpeg", "png"), 1024),
 }
 _MAGIC = {"jpeg": b"\xff\xd8\xff", "png": b"\x89PNG", "pdf": b"%PDF"}
 
-# Upper-case "TANZANIA, UNITED REPUBLIC OF" style labels with numeric ids, like many government portals.
-COUNTRIES = [(str(i + 1), c.name.upper(), c.alpha_3) for i, c in enumerate(sorted(pycountry.countries, key=lambda c: c.name))]
+# Upper-case labels with numeric ids, spelled like the live portal where known.
+_LIVE_SPELLING = {"USA": "UNITED STATES OF AMERICA", "TZA": "TANZANIA, THE UNITED REPUBLIC", "GBR": "UNITED KINGDOM"}
+COUNTRIES = [(str(i + 1), _LIVE_SPELLING.get(c.alpha_3, c.name.upper()), c.alpha_3)
+             for i, c in enumerate(sorted(pycountry.countries, key=lambda c: c.name))]
 COUNTRY_BY_ID = {cid: (label, a3) for cid, label, a3 in COUNTRIES}
 
 _STYLE = """
@@ -95,6 +99,7 @@ class MockTanzaniaPortal(MockApp):
         r("GET", "/payment", self._payment)
         r("POST", "/payment", self._payment_submit)
         r("GET", "/payment/callback", self._payment_callback)
+        r("POST", "/application/submit", self._submit_after_payment)
 
     # ------------------------------------------------------------ rendering
 
@@ -161,33 +166,30 @@ class MockTanzaniaPortal(MockApp):
             <h2>Start New Application</h2>{summary}
             <form method='post' action='/start'>
               {self._text("Email", "Email", values, errors, kind="email")}
-              {self._text("Confirm Email", "ConfirmEmail", values, errors, kind="email")}
               {self._text("Passport Number", "PassportNumber", values, errors)}
-              {self._select("Passport Issue Country", "PassportIssueCountryId", countries, values, errors)}
-              {self._select("Security Question", "SecurityQuestionId", questions, values, errors)}
+              {self._select("Passport Issue Country", "IssuedCountryID", countries, values, errors)}
+              {self._select("Security Question", "SecurityQuestion", questions, values, errors)}
               {self._text("Security Answer", "SecurityAnswer", values, errors)}
               <div class='form-group mock-captcha'><label><input type='checkbox' id='mock-captcha' name='captcha'> I'm not a robot</label>
-                {self._err(errors, 'captcha')}</div>
-              <button type='submit'>Start New Application</button>
+                {self._err(errors, 'ReCaptcha')}</div>
+              <button type='submit' name='submitPI'>Start New Application <span>|</span></button>
             </form>""")
 
     def _start_submit(self, req: Request) -> Response:
         f = req.form
         errors = {}
-        for name in ("Email", "PassportNumber", "PassportIssueCountryId", "SecurityQuestionId", "SecurityAnswer"):
+        for name in ("Email", "PassportNumber", "IssuedCountryID", "SecurityQuestion", "SecurityAnswer"):
             if not f.get(name, "").strip():
                 errors[name] = "This field is required."
-        if f.get("Email") != f.get("ConfirmEmail"):
-            errors["ConfirmEmail"] = "Emails do not match."
         if f.get("captcha") != "on":
-            errors["captcha"] = "Please confirm you are not a robot."
+            errors["ReCaptcha"] = "Please confirm you are not a robot."
         if errors:
             return self._start_form(req, f, errors)
         app_id = "TZEV" + "".join(secrets.choice("0123456789") for _ in range(8))
         self.applications[app_id] = {
             "id": app_id, "email": f["Email"], "passport_number": f["PassportNumber"],
-            "issue_country": COUNTRY_BY_ID[f["PassportIssueCountryId"]][1],
-            "question": SECURITY_QUESTIONS[int(f["SecurityQuestionId"]) - 1], "answer": f["SecurityAnswer"],
+            "issue_country": COUNTRY_BY_ID[f["IssuedCountryID"]][1],
+            "question": SECURITY_QUESTIONS[int(f["SecurityQuestion"]) - 1], "answer": f["SecurityAnswer"],
             "personal": {}, "travel": {}, "files": {}, "done": set(), "status": "Draft", "payment": None,
         }
         req.session["app_id"] = app_id
@@ -204,17 +206,17 @@ class MockTanzaniaPortal(MockApp):
         return self._layout("Continue an existing Application", f"""
             <h2>Continue an existing Application</h2>{err}
             <form method='post' action='{esc(with_query('/continueapplication', ReturnUrl=return_url))}'>
-              {self._text("Application ID", "ApplicationId", {}, {})}
+              {self._text("Application ID", "UserID", {}, {})}
               {self._text("Email", "Email", {}, {}, kind="email")}
-              {self._select("Security Question", "SecurityQuestionId", questions, {}, {})}
+              {self._select("Security Question", "SecurityQuestion", questions, {}, {})}
               {self._text("Security Answer", "SecurityAnswer", {}, {})}
-              <button type='submit'>Continue</button>
+              <button type='submit' name='submitPI'>Continue Application <span>|</span></button>
             </form>""")
 
     def _continue_submit(self, req: Request) -> Response:
         f = req.form
-        app = self.applications.get(f.get("ApplicationId", "").strip())
-        qid = f.get("SecurityQuestionId", "")
+        app = self.applications.get(f.get("UserID", "").strip())
+        qid = f.get("SecurityQuestion", "")
         ok = (app is not None and app["email"].lower() == f.get("Email", "").strip().lower()
               and qid.isdigit() and SECURITY_QUESTIONS[int(qid) - 1] == app["question"]
               and app["answer"].strip().lower() == f.get("SecurityAnswer", "").strip().lower())
@@ -397,8 +399,7 @@ class MockTanzaniaPortal(MockApp):
             return Response.redirect("/application/personal")
         visa, fee = self._fee(app)
         if app["payment"] and app["payment"]["status"] == "approved":
-            return self._layout("Payment", f"""<h2>Payment</h2><p>Payment Status: <b>PAID</b></p>
-                <p>Receipt No: {esc(app['payment']['receipt'])}</p><p>Your application is being processed.</p>""", app, "payment")
+            return self._paid_page(app)
         methods = "".join(
             f"<label style='display:block;font-weight:normal'><input type='radio' name='PaymentMethod' value='{v}'> {t}</label>"
             for v, t in (("card", "Visa/Mastercard"), ("bank", "Bank Deposit")))
@@ -425,6 +426,24 @@ class MockTanzaniaPortal(MockApp):
         app["payment"] = {"token": session.token, "status": "pending", "receipt": ""}
         return Response.redirect(self.gateway.checkout_url(session))
 
+    def _paid_page(self, app: dict) -> Response:
+        if app["status"].startswith("Submitted") or app["status"].startswith("Under processing"):
+            tail = f"<p>Application {esc(app['id'])} has been submitted for processing.</p>"
+        else:
+            tail = ("<form method='post' action='/application/submit'><p>Upon successful payment, submit your application.</p>"
+                    "<button type='submit'>Submit Application</button></form>")
+        return self._layout("Payment", f"""<h2>Payment successful</h2><p>Payment Status: <b>PAID</b></p>
+            <p>Receipt No: <b>{esc(app['payment']['receipt'])}</b></p>{tail}""", app, "payment")
+
+    def _submit_after_payment(self, req: Request) -> Response:
+        app = self._require(req)
+        if isinstance(app, Response):
+            return app
+        if not (app["payment"] and app["payment"]["status"] == "approved"):
+            return self._layout("Payment", "<p class='field-validation-error'>Please pay before submitting.</p>", app, "payment")
+        app["status"] = "Under processing"
+        return self._paid_page(app)
+
     def _payment_callback(self, req: Request) -> Response:
         token = req.query.get("token", "")
         app = next((a for a in self.applications.values() if a["payment"] and a["payment"]["token"] == token), None)
@@ -432,11 +451,10 @@ class MockTanzaniaPortal(MockApp):
         if app is None or session is None:
             return self._layout("Payment", "<p class='field-validation-error'>Unknown payment.</p>")
         if session.status == "approved":
-            app["payment"].update(status="approved", receipt=f"TZR-{secrets.token_hex(4).upper()}", last4=session.last4)
-            app["status"] = "Paid - under processing"
-            return self._layout("Payment", f"""<h2>Payment successful</h2>
-                <p>Receipt No: <b>{esc(app['payment']['receipt'])}</b></p>
-                <p>Application {esc(app['id'])} has been submitted for processing.</p>""", app, "payment")
+            if app["payment"]["status"] != "approved":
+                app["payment"].update(status="approved", receipt=f"TZR-{secrets.token_hex(4).upper()}", last4=session.last4)
+                app["status"] = "Paid - not yet submitted"
+            return self._paid_page(app)
         app["payment"]["status"] = session.status
         return self._layout("Payment", "<h2 class='field-validation-error'>Payment failed: your card was declined.</h2>"
                             "<p><a href='/payment'>Try again</a></p>", app, "payment")

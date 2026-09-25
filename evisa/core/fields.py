@@ -191,13 +191,16 @@ def _as_candidates(value: Any) -> list[str]:
     return [c for group in _groups(value) for c in group]
 
 
-def read_options(select: Locator) -> list[dict[str, str]]:
+def read_options(select: Locator) -> list[dict[str, Any]]:
+    # Portals hide options a person may not pick (e.g. a 90-day visa only some
+    # nationalities get); those count as unavailable.
     return select.evaluate(
-        "el => Array.from(el.options).map(o => ({value: o.value, label: (o.label || o.text || '').trim(), disabled: o.disabled}))"
+        """el => Array.from(el.options).map(o => ({value: o.value, label: (o.label || o.text || '').trim(),
+            disabled: o.disabled || o.hidden || getComputedStyle(o).display === 'none'}))"""
     )
 
 
-def choose_option(options: list[dict[str, str]], candidates: Any) -> dict[str, str] | None:
+def choose_option(options: list[dict[str, Any]], candidates: Any) -> dict[str, Any] | None:
     usable = [o for o in options if not o.get("disabled") and not _PLACEHOLDER_OPTION.match(o["label"].strip()) and o["value"] != ""]
     for group in _groups(candidates):
         idx = best_option_match(group, [o["label"] for o in usable])
@@ -265,7 +268,7 @@ def fill_field(scope: Scope, f: Field, ctx: Any, *, extra_locators: Sequence[str
         options = read_options(loc)
         chosen = choose_option(options, value)
         if not chosen:
-            raise OptionNotFound(f.key, _as_candidates(value), [o["label"] for o in options])
+            raise OptionNotFound(f.key, _as_candidates(value), [o["label"] for o in options if not o.get("disabled")])
         loc.select_option(value=chosen["value"], force=not loc.is_visible())
         shown = chosen["label"]
     elif f.kind is FieldKind.COMBOBOX:

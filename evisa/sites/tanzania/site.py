@@ -1,13 +1,17 @@
 """Tanzania e-visa portal profile (https://visa.immigration.go.tz).
 
-Portal flow, as documented by the Immigration Department's guidelines and
-applicant walkthroughs:
+Portal flow. The /start and /continueapplication forms were observed on the
+live portal (September 2026: Email, PassportNumber, IssuedCountryID,
+SecurityQuestion, SecurityAnswer, Google reCAPTCHA v2; UserID for the
+Application ID). The tabs after /start need a real application to see, so
+they follow the official guidelines and applicant walkthroughs:
 
     /start            email, passport number, passport issue country,
                       security question + answer, reCAPTCHA
                       -> "Start New Application" issues an Application ID
     tabs              Personal Information -> Travel Information ->
                       Attachments -> Declaration -> Payment
+                      ("Upon successful payment, submit your application")
     /continueapplication?ReturnUrl=/payment
                       resume with Application ID + email + security Q/A
 
@@ -65,17 +69,18 @@ def _address_in_tanzania(ctx: StepContext) -> str:
 
 # ------------------------------------------------------------------ field maps
 
-SECURITY_QUESTION = ("label~=Security Question", "select[name*='Question' i]")
-PASSPORT_NUMBER = ("label~=Passport Number", "label~=Passport No", "[name*='PassportNumber' i]", "[name*='PassportNo' i]")
+SECURITY_QUESTION = ("#SecurityQuestion", "label~=Security Question", "select[name*='Question' i]")
+PASSPORT_NUMBER = ("#PassportNumber", "label~=Passport Number", "label~=Passport No", "[name*='PassportNumber' i]", "[name*='PassportNo' i]")
 
 START_FIELDS = [
-    Field("email", T, ("label=Email", "label~=Email Address", "input[type='email']", "[name='Email' i]"), lambda c: c.applicant.contact.email),
+    Field("email", T, ("#Email", "label=Email", "label~=Email Address", "input[type='email']", "[name='Email' i]"), lambda c: c.applicant.contact.email),
     Field("email_confirm", T, ("label~=Confirm Email", "[name*='ConfirmEmail' i]"), lambda c: c.applicant.contact.email, **OPTIONAL),
     Field("passport_number", T, PASSPORT_NUMBER, lambda c: c.applicant.passport.number),
-    Field("passport_country", S, ("label~=Passport Issue Country", "label~=Passport Issuing Country", "label~=Country of Issue",
-                                  "label~=Issuing Country", "select[name*='IssueCountry' i]", "select[name*='Country' i]"),
+    Field("passport_country", S, ("#IssuedCountryID", "label~=Passport Issue Country", "label~=Passport Issuing Country",
+                                  "label~=Country of Issue", "label~=Issuing Country", "select[name*='IssueCountry' i]",
+                                  "select[name*='IssuedCountry' i]", "select[name*='Country' i]"),
           lambda c: list(countries.country_aliases(c.applicant.passport.issuing_country, c.site.languages)), settle_ms=300),
-    Field("security_answer", T, ("label~=Security Answer", "label=Answer", "[name*='SecurityAnswer' i]", "[name*='Answer' i]"),
+    Field("security_answer", T, ("#SecurityAnswer", "label~=Security Answer", "label=Answer", "[name*='SecurityAnswer' i]", "[name*='Answer' i]"),
           lambda c: c.state["security_answer"]),
 ]
 
@@ -181,6 +186,7 @@ DECLARATION_CHECKBOX = (
 PAYMENT_METHOD = ("label~=Payment Method", "label~=Payment Option", "select[name*='PaymentMethod' i]",
                   "input[type='radio'][name*='PaymentMethod' i]", "input[type='radio'][name*='PaymentOption' i]")
 CARD_METHOD_LABELS = ["Visa/Mastercard", "Visa / MasterCard", "Visa", "Mastercard", "Credit Card", "Card"]
+SUBMIT_AFTER_PAYMENT = ("role=button:Submit Application", "role=link:Submit Application", "input[type='submit'][value*='Submit' i]")
 PAY_BUTTONS = ("role=button:Pay Now", "role=button:Make Payment", "role=button:Proceed to Payment", "role=link:Pay Now",
                "role=button:Pay", "input[type='submit'][value*='Pay' i]")
 
@@ -205,7 +211,8 @@ class TanzaniaSite(VisaSite):
     min_passport_validity_months = 6
     document_requirements = (
         DocumentRequirement("passport_scan", "Passport bio-data page", ("jpeg", "png"), 300),
-        DocumentRequirement("photo", "Passport-size photo", ("jpeg", "png"), 300),
+        # Guidelines section 10: colour, 35x45 mm, JPG/JPEG only, at most 500 KB.
+        DocumentRequirement("photo", "Passport-size photo", ("jpeg",), 500),
         DocumentRequirement("return_ticket", "Return / onward ticket", ("pdf",), 1024),
         DocumentRequirement("accommodation_proof", "Hotel booking or invitation", ("pdf", "jpeg", "png"), 1024),
         DocumentRequirement("invitation_letter", "Invitation letter", ("pdf", "jpeg", "png"), 1024, required=False),
@@ -347,14 +354,25 @@ class TanzaniaSite(VisaSite):
                 "Security question": ctx.state.get("security_question", ""),
                 "Security answer": ctx.state.get("security_answer", ""),
             },
-            instructions="Open the portal link, sign in with the details above, choose Visa/Mastercard and pay. "
-                         "The checkout link is a live payment session and can expire; the portal link always works.",
+            instructions="Open the portal link, sign in with the details above, choose Visa/Mastercard and pay, then press "
+                         "Submit if the portal asks you to (the guidelines say to submit after paying). The checkout link "
+                         "is a live payment session and can expire; the portal link always works.",
         )
 
     def pay_by_card(self, ctx: StepContext, card: CardDetails) -> PaymentOutcome:
-        return pay_by_card(
+        outcome = pay_by_card(
             ctx, card,
             open_checkout=lambda: self._open_checkout(ctx),
             patterns=RESULT_PATTERNS,
             portal_amount=find_amount(ctx.page.inner_text("body")),
         )
+        if outcome.success:
+            self._submit_after_payment(ctx)
+        return outcome
+
+    def _submit_after_payment(self, ctx: StepContext) -> None:
+        """The guidelines say "Upon successful payment, submit your application"."""
+        ctx.page.wait_for_load_state()
+        if find(ctx.page, SUBMIT_AFTER_PAYMENT, timeout_ms=3_000):
+            submit_and_verify(ctx.page, SUBMIT_AFTER_PAYMENT, what="submit application after payment")
+            ctx.notify("application submitted after payment")

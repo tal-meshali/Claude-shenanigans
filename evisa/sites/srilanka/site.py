@@ -26,7 +26,7 @@ from playwright.sync_api import Page
 from ...core import countries
 from ...core.checkout import ResultPatterns, capture_checkout_url, pay_by_card
 from ...core.fields import Field, FieldKind, FormError, click, fill_form, find, submit_and_verify
-from ...core.models import Applicant, ApplicationBatch, PaymentLink, PaymentOutcome, Purpose, Trip
+from ...core.models import ApplicationBatch, PaymentLink, PaymentOutcome, Purpose
 from ...core.payment import CardDetails, find_amount, open_external_checkout
 from ...core.site import Step, StepContext, VisaSite
 
@@ -63,6 +63,8 @@ def _countries(code_of):
 
 
 def _visa_days(c: StepContext) -> list[str]:
+    # The live form only reveals "90" for some nationalities; for others a
+    # longer stay fails here with the options the portal actually offers.
     return ["30"] if c.trip.duration_days <= 30 else ["90"]
 
 
@@ -165,6 +167,8 @@ class SriLankaSite(VisaSite):
             trip = batch.trip_for(applicant)
             if trip.duration_days > 90:
                 problems.append(f"{applicant.ref}: an ETA covers at most 90 days (trip is {trip.duration_days})")
+        if len(self.application_units(batch)[0]) > 1 and batch.trip.duration_days > 30:
+            problems.append(f"group ETAs are for up to 30 days (trip is {batch.trip.duration_days}); use mode: individual")
         return problems
 
     # ------------------------------------------------------------------ steps
