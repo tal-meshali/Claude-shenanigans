@@ -194,7 +194,7 @@ def generate(out_dir: str | Path, people: list[MockPerson] | None = None, arriva
     }
     path = out / "applicants.yaml"
     path.write_text(
-        "# MOCK DATA — fictitious people for testing against the local mock site only.\n"
+        "# MOCK DATA — fictitious people: mock site, or live dry runs without --submit.\n"
         + yaml.dump(doc, Dumper=_BlockDumper, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )

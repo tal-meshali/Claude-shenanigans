@@ -1,4 +1,4 @@
-# MOCK DATA — fictitious people for testing against the local mock site only.
+# MOCK DATA — fictitious people: mock site, or live dry runs without --submit.
 mode: group
 visa_type: tourist
 trip:

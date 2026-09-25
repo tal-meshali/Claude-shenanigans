@@ -72,10 +72,10 @@ def test_group_application_returns_payment_link(base_url, app, tmp_path):
     assert session["trip"]["conCountry"] == "FRA"
     members = session["members"]
     assert [m["othernames"] for m in members] == ["JEAN PIERRE", "MARIE CLAIRE", "LUCAS"]
-    assert (members[0]["dobYear"], members[0]["dobMonth"], members[0]["dobDate"]) == ("1984", "03", "14")
-    assert members[1]["title"] == "02|MRS" and members[1]["gender"] == "Female"
-    assert members[2]["relationship"] == "03" and members[2]["nationality"] == "FRA"
-    # The review page's two confirm() dialogs were accepted and recorded.
+    assert members[0]["dob"] == "03-14-1984" and members[0]["passExp"] == "01-31-2034"
+    assert members[1]["title"] == "02" and members[1]["gender"] == "F"  # MRS, Female
+    assert members[2]["nationality"] == members[2]["coa"] == "FRA"
+    # The review page's confirm() dialog was accepted and recorded.
     assert any("Are you sure to confirm" in m for m in result.site_messages)
     saved = json.loads((tmp_path / "out" / "results.json").read_text())
     assert saved[0]["payment_url"] == result.payment_url

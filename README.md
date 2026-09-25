@@ -7,7 +7,7 @@ payment link** or **asks for card details and pays on the payment gateway**.
 ```
 termnconuser.jsp ─► terms "I Agree" ─► category (Tourist · Individual / Group)
    individual: one long form (applicant, travel, address, contact, 3 questions)
-   group:      travel & contact form ─► member form × N ("Add Member") ─► Next
+   group:      travel & contact form ─► member form ("Add Member" × N, same page) ─► Next
 ─► review "Confirm" (two confirm() dialogs) ─► reference + payment options
 ─► gateway  ⇒ payment link            └─► card form ⇒ paid / declined
 ```
@@ -62,7 +62,7 @@ beneficiaries:
     title: MR
     passport_issue_date: 2024-02-01
     occupation: Engineer
-    relationship: Self        # used on group applications
+    country_of_address: FRA   # where they live; defaults to contact.country
 ```
 
 The file is validated before a browser starts (email, arrival date, 30/90 visa
@@ -87,6 +87,10 @@ Mapped from the live site on 2026-09-25 (snapshots in `mock_site/portal_snapshot
   `onchange` checks run.
 * **Read-only date pickers** – dates are `mm-dd-yyyy` and set the way the calendar
   widget sets them.
+* **Group member page** – one form reused for every member: "Add Member" checks the
+  member in the browser, lists them on the same page and clears the form; the "Next"
+  button it then shows posts the whole group. It also asks for each member's
+  *Country of Address*.
 * **Server-side passport check** – after the passport number is typed the portal
   asks its server whether it is acceptable; the run waits for that before moving on
   and reports the portal's message if it refuses.
@@ -102,8 +106,8 @@ Mapped from the live site on 2026-09-25 (snapshots in `mock_site/portal_snapshot
 
 | Part | Status |
 |---|---|
-| Terms, category, **individual form**, **group travel & contact form** | Filled on the saved real pages **with the portal's own JavaScript**; its validation accepts the result (`tests/test_real_markup.py`) |
-| Group member form, review, payment options, gateway | **Not verified** – these pages only appear after submitting real data. Built from the ids in the portal's JavaScript plus text matching; check them on your first `--headful` run |
+| Terms, category, **individual form**, **group travel & contact form**, **group member form**, **review pages** (group and individual) | Driven on the live portal in dry runs (2026-09-25), and filled on the saved real pages **with the portal's own JavaScript**; its validation accepts the result (`tests/test_real_markup.py`) |
+| Payment options, gateway | **Not verified** – these pages only appear after confirming a real application. Built from text matching; check them on the first `--submit` run |
 
 All selectors live in [`srilanka_evisa/profiles/eta_gov_lk.yaml`](srilanka_evisa/profiles/eta_gov_lk.yaml);
 if a step fails, the run saves a screenshot and the page HTML (`*-blocked.html` /
@@ -111,18 +115,23 @@ if a step fails, the run saves a screenshot and the page HTML (`*-blocked.html` 
 
 ## Using it on the real portal
 
-* **Without `--submit` nothing is sent**: the run stops on the review page and leaves
-  screenshots of what would be submitted.
-* Only submit real, accurate traveller data. The mock passports are SPECIMENs for the
-  mock site; submitting them to the government portal is not allowed. Submitting to
-  eta.gov.lk asks for an explicit confirmation.
+* **Without `--submit` nothing is confirmed**: the run stops on the review page and
+  leaves screenshots of what would be submitted. The portal does receive the form
+  data on the way there (passport checks, the form pages' "Next"), as an unconfirmed
+  draft, so a dry run with the mock data can be used to map the live pages.
+* `--save-pages` also keeps the raw HTML of every portal page reached
+  (`evisa_output/*-page-*.html`) – the way new pages get mapped. They can hold
+  personal data: strip it and any session ids before committing a snapshot.
+* `--submit` / `--pay` confirm the application: only with real, accurate traveller
+  data. Submitting to eta.gov.lk asks for an explicit confirmation.
 
 ## The mock site
 
 `mock_site/server.py` serves the **saved real pages and the portal's own JavaScript**
 for the verified steps (its server-side AJAX checks are stubbed to "OK"; passport
-`REJECT123` is refused) and realistic stand-ins for the unverified ones, plus a fake
-payment gateway with the card form inside an iframe.
+`REJECT123` is refused; the review pages always show the saved mock travellers) and
+realistic stand-ins for the payment options, plus a fake payment gateway with the card
+form inside an iframe.
 
 ## Layout
 

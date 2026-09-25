@@ -7,8 +7,9 @@
 # field quietly when it is absent.
 #
 # Mapped from the live site on 2026-09-25 (snapshots in mock_site/portal_snapshot/):
-#   VERIFIED    terms page, category page, individual form, group trip/contact form
-#   UNVERIFIED  group member form, review page, payment options, gateway - those
+#   VERIFIED    terms page, category page, individual form, group trip/contact form,
+#               group member form, review pages (live dry runs 2026-09-25)
+#   UNVERIFIED  payment options, gateway - those
 #               pages only appear after submitting real data. They use generic
 #               selectors + text matching; check them on your first --headful run.
 
@@ -175,48 +176,48 @@ steps:
       selectors: ["input[name='next'][onclick*='validateGroupForm1']"]
       texts: ["^\\s*Next\\s*$"]
 
-  # UNVERIFIED: member page(s). Element ids come from the portal's
-  # GroupApplication.js; dates may be one box or year/month/day parts.
+  # Group page 2: one member form, reused for every member. "Add Member" checks the
+  # member in the browser and adds them to a list on the same page (no page load);
+  # after the first one the portal adds a "Next" button that posts the whole group.
   member_form:
-    # true: fill a member, press "add", repeat, then press "next" once.
-    # false: fill a member and press "next" to reach the following member.
-    add_each: true
     fields:
-      surname: {selectors: ["#idSurname"], labels: ["^\\s*Surname"]}
-      given_names: {selectors: ["#idOthernames"], labels: ["Other/Given Names"]}
-      title: {selectors: ["#idTitle"], labels: ["^\\s*Title"], value_map: *titles}
-      sex: {selectors: ["#idGender"], labels: ["^\\s*Gender"], value_map: *genders}
-      nationality: {selectors: ["#idNatinality"], labels: ["Nationality"], value_map: countries}
-      country_of_birth: {selectors: ["#idCOB"], labels: ["Country or Region of Birth"], value_map: countries}
-      occupation: {required: false, selectors: ["#idOccupation"], labels: ["Occupation"]}
-      relationship: {required: false, selectors: ["#idRelationShip"], labels: ["Relationship"]}
-      passport_number: {selectors: ["#idPassportNo"], labels: ["^\\s*Passport Number"]}
-      passport_number_confirm: {required: false, labels: ["Re.?Enter Passport Number"]}
-      date_of_birth:
-        labels: ["^\\s*Date of Birth"]
-        parts: {year: {selectors: ["#idDobYear"]}, month: {selectors: ["#idDobMonth"]}, day: {selectors: ["#idDobDate"]}}
-      date_of_birth_confirm: {required: false, labels: ["Re.?Enter Date of Birth"]}
-      passport_issue_date:
-        labels: ["Passport Issued Date"]
-        parts: {year: {selectors: ["#idPassIsueYear"]}, month: {selectors: ["#idPassIsueMonth"]}, day: {selectors: ["#idPassIsueDate"]}}
-      passport_expiry_date:
-        labels: ["Passport Expiry Date"]
-        parts: {year: {selectors: ["#idPassExpYear"]}, month: {selectors: ["#idPassExpMonth"]}, day: {selectors: ["#idPassExpDate"]}}
-      q_residence_visa: {<<: *q1, required: false}
-      q_currently_in_sri_lanka: {<<: *q2, required: false}
-      q_multiple_entry_visa: {<<: *q3, required: false}
-      confirm_info: {<<: *conf, required: false}
-    add_another:
-      selectors: ["input[onclick*='addMember' i]", "input[name='add' i]"]
-      texts: ["^\\s*Add( Member| Applicant| Another)?\\s*$", "^\\s*Save( Member)?\\s*$"]
+      surname: {selectors: ["#idSurname"]}
+      given_names: {selectors: ["#idOthernames"]}
+      title: {selectors: ["#idTitle"], value_map: *titles}
+      date_of_birth: {selectors: ["#idDobDate"]}
+      date_of_birth_confirm: {selectors: ["#idReEnteredDobDate"]}
+      sex: {selectors: ["#idGender"], value_map: *genders}
+      nationality: {selectors: ["#idNatinality"], value_map: countries}
+      country_of_birth: {selectors: ["#idCOB"], value_map: countries}
+      country_of_address: {selectors: ["#idCOA"], value_map: countries}
+      occupation: {required: false, selectors: ["#idOccupation"]}
+      passport_number:
+        selectors: ["#idPassportNo"]
+        # onchange asks the server about number + nationality and shows a spinner
+        # until it answers (#idHiddenPassOk stays 1 after the first member, so it
+        # can't be used here). A refusal is an alert() that clears the number.
+        wait_for: "#idLodingPassPort:not(:has(img))"
+      passport_number_confirm: {selectors: ["#idReEnteredPassportNo"]}
+      passport_issue_date: {selectors: ["#idPassIsueDate"]}
+      passport_expiry_date: {selectors: ["#idPassExpDate"]}
+      q_residence_visa: *q1
+      q_currently_in_sri_lanka: *q2
+      q_multiple_entry_visa: *q3
+      confirm_info: {kind: checkbox, selectors: ["#idConfTick"]}
+    add:
+      selectors: ["#idAddMember"]
+      texts: ["^\\s*Add Member\\s*$"]
+    # appears once member n (1-based) is in the list
+    added: "#hiddenPassportNo{n}"
     next:
-      selectors: ["input[name='next']", "#submitButton"]
-      texts: ["^\\s*(Next|Continue|Proceed|Finish)\\s*$"]
+      selectors: ["#idSumfB input[value='Next']"]
 
-  # UNVERIFIED: review page. The portal's confirmForm() asks two confirm() dialogs.
+  # Review page ("2. Review Information"). Group: #idConform ->
+  # submittionOfForm3Group(this,'3'), one confirm(). Individual:
+  # confirmForm(), two confirm() dialogs (the second is the fraud declaration).
   review:
     submit:
-      selectors: ["input[onclick*='confirmForm']", "button[onclick*='confirmForm']"]
+      selectors: ["#idConform", "input[onclick*='confirmForm']", "button[onclick*='confirmForm']"]
       texts: ["^\\s*Confirm\\s*$"]
 
   # UNVERIFIED: payment options page ("3. Payment Options").

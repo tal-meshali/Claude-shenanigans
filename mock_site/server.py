@@ -8,12 +8,12 @@ the portal's own JavaScript, so its client-side validation really runs:
   -> category links (Tourist Individual / Group)   [rebuilt from the real page]
   -> individual form                                [real page]
      or group travel & contact form                 [real page]
-        -> member form(s), "Add Member" / "Next"    [stand-in]
-  -> review with confirmForm() dialogs              [stand-in]
+        -> member form, "Add Member" x N, "Next"    [real page]
+  -> review ("Confirm" + confirm() dialogs)         [real page; shows the saved mock travellers]
   -> reference + payment options -> gateway         [stand-in]
 
-The portal's server-side AJAX checks (DWR) are stubbed to "OK"; passport
-number "REJECT123" is refused, to test that path.
+The portal's server-side AJAX checks (DWR) are stubbed to "OK" (and a group
+limit of GROUP_MAX members); passport number "REJECT123" is refused, to test that path.
 Test cards: 4111 1111 1111 1111 is approved, 4000 0000 0000 0002 is declined.
 State for assertions is exposed as JSON at /__state.
 """
@@ -37,8 +37,8 @@ FEE_USD = 50
 NAV = "/etaslvisa/etaNavServ"
 CATEGORY_IDS = {"1": ("tourist", "INDIVIDUAL"), "2": ("tourist", "GROUP"), "21": ("business", "INDIVIDUAL"),
                 "32": ("business", "GROUP"), "5": ("transit", "INDIVIDUAL"), "6": ("transit", "GROUP")}
-COUNTRIES = [("FRA", "FRANCE (FRA)"), ("DEU", "GERMANY (DEU)"), ("GBR", "UNITED KINGDOM (GBR)"),
-             ("USA", "UNITED STATES (USA)"), ("ISR", "ISRAEL (ISR)"), ("IND", "INDIA (IND)")]
+
+GROUP_MAX = 10  # the portal's GMEM parameter (real value not known)
 
 SESSIONS: dict[str, dict] = {}
 PAYMENTS: dict[str, dict] = {}
@@ -46,8 +46,9 @@ LOCK = threading.Lock()
 
 DWR_STUB = """var %(obj)s = new Proxy({}, {get: function (t, method) { return function () {
   var args = Array.prototype.slice.call(arguments), cb = args[args.length - 1];
-  var answer = (method === 'validateIndPassport' && args[0] === 'REJECT123')
-      ? 'This passport number is not allowed' : null;
+  var answer = (/^validate(Ind)?PassPort$/i.test(method) && args[0] === 'REJECT123')
+      ? 'This passport number is not allowed'
+      : method === 'getActivParameters' ? [{code: 'GMEM', value: %(group_max)d}, {code: 'MDEP', value: 5}] : null;
   if (typeof cb === 'function') setTimeout(function () { cb(answer); }, 50);
 }; }});"""
 
@@ -67,29 +68,6 @@ def parse_mdy(value: str) -> date | None:
     try:
         return datetime.strptime(value, "%m-%d-%Y").date()
     except ValueError:
-        return None
-
-
-def select(id_: str, name: str, options: list[tuple[str, str]]) -> str:
-    opts = '<option value="0X">[Select Please]</option>' + "".join(
-        f'<option value="{esc(v)}">{esc(t)}</option>' for v, t in options)
-    return f'<select id="{id_}" name="{name}">{opts}</select>'
-
-
-def row(label: str, control: str) -> str:
-    return f'<tr><td class="inner_text_1">{label}<font color="#FF0000">*</font></td><td>{control}</td></tr>'
-
-
-def date_parts(prefix: str, name: str, years: range) -> str:
-    return (select(f"id{prefix}Year", f"{name}Year", [(str(y), str(y)) for y in years])
-            + select(f"id{prefix}Month", f"{name}Month", [(f"{m:02d}", f"{m:02d}") for m in range(1, 13)])
-            + select(f"id{prefix}Date", f"{name}Date", [(f"{d:02d}", f"{d:02d}") for d in range(1, 32)]))
-
-
-def parts_date(f: dict[str, str], name: str) -> date | None:
-    try:
-        return date(int(f[f"{name}Year"]), int(f[f"{name}Month"]), int(f[f"{name}Date"]))
-    except (KeyError, ValueError):
         return None
 
 
@@ -129,7 +107,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def form(self) -> dict[str, str]:
         raw = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8", "replace")
-        return {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
+        self.form_lists = parse_qs(raw, keep_blank_values=True)
+        return {k: v[0] for k, v in self.form_lists.items()}
 
     def snapshot(self, name: str, sid: str) -> None:
         self.send((SNAPSHOT / name).read_bytes(), sid=sid)
@@ -153,7 +132,8 @@ class Handler(BaseHTTPRequestHandler):
             if SNAPSHOT in file.parents and file.is_file():
                 return self.send(file.read_bytes(), ctype="application/javascript")
         if path.startswith("/etaslvisa/dwr/interface/"):
-            return self.send(DWR_STUB % {"obj": Path(path).stem}, ctype="application/javascript")
+            return self.send(DWR_STUB % {"obj": Path(path).stem, "group_max": GROUP_MAX},
+                             ctype="application/javascript")
         if path == "/etaslvisa/dwr/engine.js":
             return self.send("", ctype="application/javascript")
         if path == "/ipg/pay":
@@ -195,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
                 s["members"] = [{k: f.get(k, "") for k in ("title", "surname", "othernames", "bdate", "gender",
                                  "national", "conbirth", "passportno", "pidate", "pedate", "QN1", "QN2", "QN3")}]
                 s["status"] = "review"
-                return self.send(self.review_page(s), sid=sid)
+                return self.snapshot("eta_individual_review.html", sid)
             if "conAddOne" in f and s.get("app_type") == "GROUP":
                 missing = [k for k in ("fromDeparture", "arrivalDate", "puofvisit", "conAddOne", "contCity",
                                        "contState", "conCountry", "contPhoneNo", "contEmail") if f.get(k, "0X") in ("", "0X")]
@@ -203,19 +183,18 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(page("Error", f"<p>Invalid group details {missing}</p>"), sid=sid, status=400)
                 s["trip"] = f
                 s["members"] = []
-                return self.send(self.member_page(s), sid=sid)
-            if f.get("memberAction") in ("add", "next") and s.get("app_type") == "GROUP":
-                if f["memberAction"] == "add":
-                    error = self.validate_member(f)
-                    if error:
-                        return self.send(self.member_page(s, error), sid=sid)
-                    s["members"].append({k: v for k, v in f.items() if k != "memberAction"})
-                    return self.send(self.member_page(s), sid=sid)
-                if len(s["members"]) < 2:
-                    return self.send(self.member_page(s, "A group needs at least two members."), sid=sid)
+                return self.snapshot("eta_group_member_form.html", sid)
+            if "hiddenPassportNo" in f and s.get("app_type") == "GROUP":
+                # "Next" on the member page posts every added member as parallel hidden inputs
+                members = self.group_members()
+                error = self.validate_members(members)
+                if error:
+                    return self.send(page("Error", f"<p>{esc(error)}</p>"), sid=sid, status=400)
+                s["members"] = members
                 s["status"] = "review"
-                return self.send(self.review_page(s), sid=sid)
-            if f.get("actiontype") == "2" and s.get("status") == "review":
+                return self.snapshot("eta_group_review.html", sid)
+            # Confirm: individual confirmForm() posts actiontype 2, group #idConform posts 3
+            if f.get("actiontype") in ("2", "3") and s.get("status") == "review":
                 s["reference"] = "LK" + secrets.token_hex(5).upper()
                 s["status"] = "submitted"
                 return self.send(self.payment_options_page(s), sid=sid)
@@ -258,16 +237,28 @@ class Handler(BaseHTTPRequestHandler):
             return "re-entered values differ"
         return ""
 
-    def validate_member(self, f: dict[str, str]) -> str:
-        required = ["title", "surname", "othernames", "gender", "nationality", "cob", "passportNo"]
-        missing = [k for k in required if f.get(k, "0X") in ("", "0X")]
-        if missing:
-            return f"Please fill: {', '.join(missing)}"
-        dob, issued, expiry = parts_date(f, "dob"), parts_date(f, "passIsue"), parts_date(f, "passExp")
-        if not (dob and issued and expiry):
-            return "Please select valid dates"
-        if expiry <= date.today():
-            return "Passport has expired"
+    MEMBER_FIELDS = {"surname": "hiddenSurname", "othernames": "hiddenOtherNames", "title": "hiddenTitle",
+                     "gender": "hiddenGender", "nationality": "hiddenNationality", "cob": "hiddenCob",
+                     "coa": "hiddenCoa", "occupation": "hiddenOccupation", "passportNo": "hiddenPassportNo",
+                     "dob": "hiddenDobDate", "passIssue": "hiddenPassIssueDate", "passExp": "hiddenPassExDate"}
+
+    def group_members(self) -> list[dict[str, str]]:
+        cols = {k: self.form_lists.get(v, []) for k, v in self.MEMBER_FIELDS.items()}
+        return [{k: col[i] if i < len(col) else "" for k, col in cols.items()}
+                for i in range(len(cols["passportNo"]))]
+
+    def validate_members(self, members: list[dict[str, str]]) -> str:
+        if not 1 <= len(members) <= GROUP_MAX:
+            return f"a group has 1 to {GROUP_MAX} members, got {len(members)}"
+        for m in members:
+            missing = [k for k, v in m.items() if k != "occupation" and v in ("", "0X")]
+            if missing:
+                return f"member {m['passportNo']}: missing {missing}"
+            dates = [parse_mdy(m[k]) for k in ("dob", "passIssue", "passExp")]
+            if not all(dates):
+                return "dates must be mm-dd-yyyy"
+            if dates[2] <= date.today():
+                return "Passport has expired"
         return ""
 
     # ----------------------------------------------------------- stand-in pages
@@ -285,48 +276,6 @@ class Handler(BaseHTTPRequestHandler):
 <input type="hidden" name="appSType" id='idAppType' value="0"/>
 <input type="hidden" name="pageNumber" id='idpageNumber' value="2" /></form>""",
             scripts='<script src="js/com/etafunctional.js"></script>')
-
-    def member_page(self, s: dict, error: str = "") -> str:
-        members = "".join(f"<tr><td>{esc(m['surname'])}</td><td>{esc(m['othernames'])}</td>"
-                          f"<td>{esc(m['passportNo'])}</td></tr>" for m in s["members"])
-        countries = [(f"{c}", t) for c, t in COUNTRIES]
-        this_year = date.today().year
-        return page(f"Group Application - Member {len(s['members']) + 1}", f"""
-<table border="1"><tr><th>Surname</th><th>Other Names</th><th>Passport</th></tr>{members}</table>
-<form method="post" action="etaNavServ" name="form1"><table>
-{row('Title', select('idTitle', 'title', [('01|MR', 'MR'), ('02|MRS', 'MRS'), ('03|MISS', 'MISS'),
-                                          ('04|MS', 'MS'), ('05|MASTER', 'MASTER')]))}
-{row('Surname/Family Name', '<input id="idSurname" name="surname" oninput="limitInput(this);">')}
-{row('Other/Given Names', '<input id="idOthernames" name="othernames" oninput="limitInput(this);">')}
-{row('Date of Birth', date_parts('Dob', 'dob', range(this_year, 1900, -1)))}
-{row('Gender', select('idGender', 'gender', [('Male', 'Male'), ('Female', 'Female')]))}
-{row('Nationality', select('idNatinality', 'nationality', countries))}
-{row('Country or Region of Birth', select('idCOB', 'cob', countries))}
-{row('Occupation', '<input id="idOccupation" name="occupation">')}
-{row('Relationship', select('idRelationShip', 'relationship', [('01', 'Self'), ('02', 'Spouse'), ('03', 'Child'),
-                                                               ('04', 'Parent'), ('05', 'Friend')]))}
-{row('Passport Number', '<input id="idPassportNo" name="passportNo" oninput="limitInput(this);">')}
-{row('Passport Issued Date', date_parts('PassIsue', 'passIsue', range(this_year, this_year - 12, -1)))}
-{row('Passport Expiry Date', date_parts('PassExp', 'passExp', range(this_year, this_year + 12)))}
-</table><input type="hidden" name="memberAction" id="idMemberAction" value="">
-<input type="button" name="add" value="Add Member"
-  onclick="document.getElementById('idMemberAction').value='add'; this.form.submit();">
-<input type="button" name="next" value="Next"
-  onclick="document.getElementById('idMemberAction').value='next'; this.form.submit();">
-</form>""", error, scripts='<script src="js/grp/validateBusinessUI.js"></script>')
-
-    def review_page(self, s: dict) -> str:
-        rows = "".join(
-            f"<tr><td>{esc(m.get('surname'))}</td><td>{esc(m.get('othernames'))}</td>"
-            f"<td>{esc(m.get('passportno') or m.get('passportNo'))}</td></tr>" for m in s["members"])
-        return page("Review Information", f"""
-<p>Please review your application and confirm.</p>
-<table border="1"><tr><th>Surname</th><th>Other Names</th><th>Passport</th></tr>{rows}</table>
-<form method="post" action="etaNavServ" name="form2">
-<input type="hidden" name="actiontype" id="idActiontype" value="1">
-<input type="button" value="Edit" onclick="history.back()">
-<input type="button" value="Confirm" onclick="confirmForm(this);">
-</form>""", scripts='<script src="js/com/etafunctional.js"></script>')
 
     def payment_options_page(self, s: dict) -> str:
         total = FEE_USD * len(s["members"])

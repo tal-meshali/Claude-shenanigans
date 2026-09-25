@@ -43,6 +43,7 @@ class Beneficiary:
     title: str = ""  # MR / MRS / MS / MISS / MASTER / DR
     occupation: str = ""
     relationship: str = ""  # for group members, e.g. "Spouse", "Child"
+    country_of_address: str = ""  # ISO3 country the traveller lives in (default: the contact's country)
     passport_image: Path | None = None  # scan of the passport bio page (source of the MRZ)
     photo: Path | None = None  # passport-style photo, for portals that ask for one
 
@@ -182,8 +183,8 @@ def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
     # The portal only accepts upper-case names and passport numbers.
     for key in ("surname", "given_names", "passport_number"):
         raw[key] = str(raw[key]).upper().strip()
-    for key in ("nationality", "country_of_birth", "passport_issuing_country"):
-        raw[key] = str(raw[key]).upper()
+    for key in ("nationality", "country_of_birth", "passport_issuing_country", "country_of_address"):
+        raw[key] = str(raw.get(key, "")).upper()
     return Beneficiary(**raw)
 
 

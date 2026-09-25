@@ -50,10 +50,12 @@ def open_fixture(browser):
             if "/dwr/interface/" in req.url:
                 # Server-side AJAX checks (e.g. passport lookup): answer "no problem".
                 obj = req.url.rsplit("/", 1)[-1].split(".")[0]
+                # The member page also asks for its parameters (GMEM = max group size).
                 return route.fulfill(content_type="application/javascript", body=(
-                    f"var {obj} = new Proxy({{}}, {{get: () => function () {{"
+                    f"var {obj} = new Proxy({{}}, {{get: (t, method) => function () {{"
                     " var cb = arguments[arguments.length - 1];"
-                    " if (typeof cb === 'function') setTimeout(() => cb(null), 50); }});"))
+                    " var answer = method === 'getActivParameters' ? [{code: 'GMEM', value: 10}] : null;"
+                    " if (typeof cb === 'function') setTimeout(() => cb(answer), 50); }});"))
             return route.abort()
 
         page.route("**/*", handle)
@@ -146,3 +148,46 @@ def test_group_trip_form_is_fully_filled(open_fixture, app):
     assert posted["appType"] == ["2"] and posted["contEmail"] == ["jean.dupont@example.com"]
     assert posted["conAddOne"] == ["12 RUE DE LA PAIX"]  # the site upper-cases as you type
     assert not [a for a in page.alerts if "valid for 30 days" not in a]
+
+
+def test_group_member_form_adds_every_member(open_fixture, app):
+    """The member page is reused per member: "Add Member" keeps each one in hidden inputs
+    on the page, and the "Next" button it then shows posts them all at once."""
+    page = open_fixture("eta_group_member_form.html")
+    profile = load_profile()
+    step = profile["steps"]["member_form"]
+    for i, member in enumerate(app.beneficiaries, 1):
+        values = {**beneficiary_values(member), **declaration_values(app), "country_of_address": app.contact.country}
+        filled = fill_fields(page, step["fields"], values, profile["date_format"])
+        assert set(filled) == set(step["fields"])
+        locate(page, step["add"]).click()
+        page.wait_for_selector(step["added"].format(n=i), state="attached", timeout=5000)
+        assert page.locator("#idSurname").input_value() == ""  # the portal clears the form for the next one
+
+    locate(page, step["next"]).click()
+    page.wait_for_timeout(1500)
+    [posted] = page.posts
+    assert posted["hiddenOtherNames"] == ["JEAN PIERRE", "MARIE CLAIRE", "LUCAS"]
+    assert posted["hiddenPassportNo"] == posted["hiddenReEnteredPassportNo"] == ["24FR81234", "23FR55120", "25FR00731"]
+    assert posted["hiddenDobDate"] == posted["hiddenReEnteredDobDate"] == ["03-14-1984", "11-02-1987", "07-30-2014"]
+    assert posted["hiddenTitle"] == ["01", "02", "05"] and posted["hiddenGender"] == ["M", "F", "M"]
+    assert posted["hiddenNationality"] == posted["hiddenCoa"] == ["FRA"] * 3
+    assert posted["hiddenPassExDate"][0] == "01-31-2034"
+    assert sorted(posted["otherDecQuesAns"]) == sorted(
+        f"{n}|QN{q}|0" for n in posted["hiddenPassportNo"] for q in (1, 2, 3))  # three "No" answers each
+    assert not [a for a in page.alerts if "maximum number of members" not in a]
+
+
+@pytest.mark.parametrize("fixture, actiontype, dialogs", [
+    ("eta_group_review.html", "3", 1),       # #idConform -> submittionOfForm3Group(this, '3')
+    ("eta_individual_review.html", "2", 2),  # confirmForm(): "Are you sure...", fraud declaration
+])
+def test_review_confirm_button(open_fixture, fixture, actiontype, dialogs):
+    page = open_fixture(fixture)
+    confirm = locate(page, load_profile()["steps"]["review"]["submit"])
+    assert confirm is not None and "Confirm" in confirm.get_attribute("value")
+    confirm.click()
+    page.wait_for_timeout(1000)
+    [posted] = page.posts  # captured locally, never sent
+    assert posted["actiontype"] == [actiontype]
+    assert len(page.alerts) == dialogs and "Are you sure to confirm" in page.alerts[0]

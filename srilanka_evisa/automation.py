@@ -12,7 +12,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 import yaml
-from playwright.sync_api import BrowserContext, Dialog, Page, sync_playwright
+from playwright.sync_api import BrowserContext, Dialog, Page, Response, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from .forms import FieldNotFound, click, fill_fields, locate
@@ -111,6 +111,7 @@ class EtaAutomation:
         submit: bool = False,
         slow_mo: int = 0,
         timeout_ms: int = 30_000,
+        save_pages: bool = False,
         log: Callable[[str], None] = print,
         wait_for_human: Callable[[str], None] = lambda msg: input(f"{msg} Press Enter to continue... "),
     ):
@@ -121,6 +122,7 @@ class EtaAutomation:
         self.submit = submit
         self.slow_mo = slow_mo
         self.timeout_ms = timeout_ms
+        self.save_pages = save_pages
         self.log = log
         self.wait_for_human = wait_for_human
         self.steps = self.profile["steps"]
@@ -182,6 +184,8 @@ class EtaAutomation:
         fmt = self.profile["date_format"]
         self._dialogs, self._dialogs_all = [], []
         page.on("dialog", self._on_dialog)
+        if self.save_pages:
+            page.on("response", lambda r: self._save_document(r, tag, result))
 
         self.log(f"[{tag}] {mode} {app.visa_type} application for {', '.join(result.beneficiaries)}")
         page.goto(self.base_url + self.profile["start_path"])
@@ -208,15 +212,12 @@ class EtaAutomation:
             step = self.steps["member_form"]
             for i, member in enumerate(members, 1):
                 values = {**beneficiary_values(member), **declaration_values(app)}
+                values["country_of_address"] = member.country_of_address or app.contact.country
+                self._dialogs.clear()  # a refused passport number shows up as an alert
                 filled = fill_fields(page, step["fields"], values, fmt)
                 self.log(f"[{tag}]  member {i}/{len(members)} {member.full_name}: {len(filled)} fields")
-                last = i == len(members)
-                if step.get("add_each", True):
-                    self._click_and_wait(page, step["add_another"], f"add member {i}", tag, result)
-                    if last:
-                        self._click_and_wait(page, step["next"], "next (members)", tag, result)
-                else:
-                    self._click_and_wait(page, step["next"], f"next (member {i})", tag, result)
+                self._click_and_expect(page, step["add"], step["added"].format(n=i), f"add member {i}", tag, result)
+            self._click_and_wait(page, step["next"], "next (members)", tag, result)
 
         self._snapshot(page, f"{tag}-review", result)
         if not self.submit:
@@ -312,6 +313,17 @@ class EtaAutomation:
         self._keep_https(page)
         self._check_fatal(page)
 
+    def _click_and_expect(self, page: Page, spec: dict[str, Any], selector: str, what: str, tag: str,
+                          result: SessionResult) -> None:
+        """Click something that updates the current page; wait for `selector` to appear."""
+        click(page, spec, what)
+        try:
+            page.wait_for_selector(selector, state="attached", timeout=self.timeout_ms)
+        except PlaywrightTimeout:
+            alerts = [text for kind, text in self._dialogs if kind == "alert"]
+            self._save_debug(page, f"{tag}-{what.replace(' ', '_')}-blocked", result)
+            raise StepError(f"'{what}' was not accepted" + (f": the site says {alerts[-1]!r}" if alerts else ""))
+
     def _keep_https(self, page: Page) -> None:
         base = urlparse(self.base_url)
         url = urlparse(page.url)
@@ -337,6 +349,21 @@ class EtaAutomation:
         if self.headless:
             raise CaptchaRequired("the site shows a CAPTCHA; re-run with --headful to solve it by hand")
         self.wait_for_human(f"[{tag}] Please solve the CAPTCHA in the browser window.")
+
+    def _save_document(self, response: Response, tag: str, result: SessionResult) -> None:
+        """Save the raw HTML of a page the portal sent (before the gateway), to map new pages.
+        The files hold session ids and personal data: sanitize before committing."""
+        req = response.request
+        if req.resource_type != "document" or result.status == "payment_link" \
+                or urlparse(req.url).hostname != urlparse(self.base_url).hostname:
+            return
+        try:
+            body = response.text()
+        except Exception:
+            return  # redirects have no body
+        path = self.out_dir / f"{tag}-page-{datetime.now():%H%M%S%f}.html"
+        path.write_text(f"<!-- {req.method} {req.url} -->\n{body}", encoding="utf-8")
+        result.artifacts.append(str(path))
 
     def _snapshot(self, page: Page, name: str, result: SessionResult) -> None:
         path = self.out_dir / f"{datetime.now():%H%M%S}-{name}.png"

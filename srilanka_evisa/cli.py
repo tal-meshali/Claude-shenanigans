@@ -57,6 +57,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         headless=not args.headful,
         submit=args.submit or args.pay,
         slow_mo=args.slow_mo,
+        save_pages=args.save_pages,
     )
     results = bot.run(app, card_provider=card_provider, confirm_payment=confirm)
 
@@ -96,6 +97,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--yes", action="store_true", help="don't ask for confirmations")
     a.add_argument("--headful", action="store_true", help="show the browser (needed to solve CAPTCHAs)")
     a.add_argument("--slow-mo", type=int, default=0, help="ms delay between browser actions")
+    a.add_argument("--save-pages", action="store_true",
+                   help="also save the HTML of every page reached (to map new portal pages)")
     a.add_argument("--out", default="evisa_output", help="folder for screenshots and results.json")
     a.set_defaults(func=cmd_apply)
     return ap
