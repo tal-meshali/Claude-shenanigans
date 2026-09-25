@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evisa-automation"
-version = "0.1.0"
+version = "0.2.0"
 description = "Browser automation for e-visa portals (Tanzania, Sri Lanka) with a shared, country-agnostic core"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,10 +13,12 @@ dependencies = [
     "pydantic>=2.5",
     "pillow>=10.0",
     "pycountry>=22.3",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+ocr = ["pytesseract>=0.3"]
 
 [project.scripts]
 evisa = "evisa.cli:main"

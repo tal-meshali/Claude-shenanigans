@@ -231,7 +231,8 @@ def fill_field(scope: Scope, f: Field, ctx: Any, *, extra_locators: Sequence[str
 
     specs = [*extra_locators, *f.locators]
     hidden_ok = f.kind in (FieldKind.FILE, FieldKind.SELECT, FieldKind.CHECKBOX, FieldKind.RADIO)
-    found = find(scope, specs, require_visible=not hidden_ok, timeout_ms=timeout_ms, skip_used=True)
+    # Only required fields wait for the page; optional ones get a single look.
+    found = find(scope, specs, require_visible=not hidden_ok, timeout_ms=timeout_ms if f.required else 0, skip_used=True)
     if not found:
         if f.required:
             raise FieldNotFound(f.key, specs, _page_of(scope).url)
@@ -310,9 +311,15 @@ def _choose_radio(scope: Scope, key: str, group_spec: str, candidates: Any) -> s
     labels = [
         r.evaluate(
             """el => {
-                const byFor = el.labels && el.labels.length ? el.labels[0].innerText : '';
+                if (el.labels && el.labels.length) return el.labels[0].innerText.trim();
                 const parent = el.closest('label');
-                return (byFor || (parent ? parent.innerText : '') || el.getAttribute('aria-label') || el.value || '').trim();
+                if (parent) return parent.innerText.trim();
+                if (el.getAttribute('aria-label')) return el.getAttribute('aria-label').trim();
+                // Table layouts: "<input type=radio> Yes" with the caption as the next text node.
+                let n = el.nextSibling;
+                while (n && n.nodeType === 3 && !n.textContent.trim()) n = n.nextSibling;
+                if (n && (n.nodeType === 3 || ['SPAN', 'FONT', 'B'].includes(n.tagName))) return n.textContent.trim();
+                return (el.value || '').trim();
             }"""
         )
         for r in radios
@@ -398,13 +405,36 @@ def submit_and_verify(
     as a FormError so the run log says exactly what the portal disliked.
     """
     page.evaluate(f"window.{_NAV_FLAG} = true")
+    alerts: list[str] = []
+
+    def on_dialog(dialog) -> None:
+        # Portals that validate in JavaScript report problems with alert();
+        # confirm() prompts ("are you sure?") are accepted.
+        if dialog.type == "confirm":
+            dialog.accept()
+        else:
+            alerts.append(dialog.message.strip())
+            dialog.dismiss()
 
     def navigated() -> bool:
         return not page.evaluate(f"!!window.{_NAV_FLAG}")
 
+    page.on("dialog", on_dialog)
+    try:
+        _submit_wait(page, buttons, what, arrived, navigated, alerts, timeout_ms)
+    finally:
+        page.remove_listener("dialog", on_dialog)
+
+
+def _submit_wait(
+    page: Page, buttons: Sequence[str], what: str, arrived: Callable[[], bool] | None,
+    navigated: Callable[[], bool], alerts: list[str], timeout_ms: int,
+) -> None:
     click(page, buttons, what=f"{what} submit button")
     waited = 0
     while waited < timeout_ms:
+        if alerts:
+            raise FormError(f"{what}: portal said: " + " | ".join(alerts))
         try:
             if arrived is not None and arrived():
                 return

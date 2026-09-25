@@ -197,3 +197,14 @@ class MockCardGateway(MockApp):
         if req.form.get("otp", "").strip() != OTP:
             return Response.redirect(f"/acs/{s.token}?error=1")
         return self._approve(s)
+
+
+def complete_mock_3ds(page) -> None:
+    """3-D Secure handler for the mock bank: types the one-time code (loopback only)."""
+    from ..core.browser import is_loopback
+
+    for frame in page.frames:
+        if "/acs/" in frame.url and is_loopback(frame.url):
+            frame.fill("#otp", OTP)
+            frame.click("button")
+            return

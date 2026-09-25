@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from ..core.site import VisaSite
+from .srilanka import SriLankaSite
 from .tanzania import TanzaniaSite
 
 SITES: dict[str, type[VisaSite]] = {
     TanzaniaSite.key: TanzaniaSite,
+    SriLankaSite.key: SriLankaSite,
 }
 
 

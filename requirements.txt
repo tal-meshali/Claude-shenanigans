@@ -1,6 +1,9 @@
+# Same as pyproject.toml; `pip install -e .[dev]` also works.
 playwright>=1.45
-PyYAML>=6.0
+pydantic>=2.5
 Pillow>=10.0
+pycountry>=22.3
+PyYAML>=6.0
 pytest>=8.0
-# optional, for `read_mrz_from_image: true` (also needs the tesseract binary):
+# optional, to read a passport's MRZ from its scan (read_mrz_from_image: true; also needs the tesseract binary):
 # pytesseract>=0.3

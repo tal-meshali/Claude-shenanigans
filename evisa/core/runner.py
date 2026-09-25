@@ -64,6 +64,7 @@ class BatchReport(BaseModel):
     site: str
     site_name: str
     base_url: str
+    run_dir: str = ""
     payment_mode: PaymentMode
     started_at: datetime = Field(default_factory=datetime.now)
     finished_at: datetime | None = None
@@ -117,7 +118,8 @@ class BatchRunner:
         self.site, self.batch, self.options = site, batch, options
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.run_dir = Path(options.out_dir) / f"{site.key}-{stamp}"
-        self.report = BatchReport(site=site.key, site_name=site.name, base_url=site.base_url, payment_mode=options.payment)
+        self.report = BatchReport(site=site.key, site_name=site.name, base_url=site.base_url, payment_mode=options.payment,
+                                  run_dir=str(self.run_dir))
 
     # ----------------------------------------------------------------- setup
 

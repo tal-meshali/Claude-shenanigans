@@ -8,11 +8,13 @@ from typing import Callable
 
 from .gateway import MockCardGateway
 from .server import MockApp, serve
+from .srilanka import MockSriLankaPortal
 from .tanzania import MockTanzaniaPortal
 
 # site key -> factory(gateway) -> portal app. Each country registers its mock here.
 MOCK_PORTALS: dict[str, Callable[[MockCardGateway], MockApp]] = {
     "tanzania": MockTanzaniaPortal,
+    "srilanka": MockSriLankaPortal,
 }
 
 

@@ -1,0 +1,53 @@
+# MOCK DATA - fictitious people, only for the local mock portal (evisa demo).
+# Passports are given by their MRZ; fields the MRZ does not carry are added below it.
+country: srilanka
+mode: group            # one group application; use "individual" for one each
+trip:
+  visa_type: tourist
+  purpose: tourism
+  arrival_date: 2027-02-10
+  duration_days: 21
+  departure_country: FRA
+  departure_city: Paris CDG
+  carrier: SriLankan Airlines
+  arrival_flight: UL564
+  accommodation:
+    name: Galle Face Hotel
+    address: 2 Galle Road
+    city: Colombo 03
+contact:
+  email: jean.dupont@example.com
+  phone: "+33612345678"
+  address: {line1: 12 Rue de la Paix, city: Paris, postal_code: "75002", country: FRA}
+applicants:
+  - ref: jean-dupont
+    mock: true
+    title: Mr
+    passport:
+      mrz: |
+        P<FRADUPONT<<JEAN<PIERRE<<<<<<<<<<<<<<<<<<<<
+        24FR812342FRA8403146M3401310<<<<<<<<<<<<<<06
+      date_of_issue: 2024-02-01
+      place_of_birth: Lyon
+    occupation: Engineer
+    marital_status: married
+  - ref: marie-dupont
+    mock: true
+    title: Mrs
+    passport:
+      mrz: |
+        P<FRADUPONT<<MARIE<CLAIRE<<<<<<<<<<<<<<<<<<<
+        23FR551200FRA8711027F3306194<<<<<<<<<<<<<<04
+      date_of_issue: 2023-06-20
+      place_of_birth: Paris
+    occupation: Teacher
+    marital_status: married
+  - ref: lucas-dupont
+    mock: true
+    passport:
+      mrz: |
+        P<FRADUPONT<<LUCAS<<<<<<<<<<<<<<<<<<<<<<<<<<
+        25FR007312FRA1407307M3501081<<<<<<<<<<<<<<02
+      date_of_issue: 2025-01-09
+      place_of_birth: Paris
+    occupation: Student
