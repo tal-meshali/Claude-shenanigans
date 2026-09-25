@@ -208,6 +208,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("countries", help="list supported countries")
     c.set_defaults(func=cmd_countries)
+    # Also accept -v after the subcommand (`evisa apply file.yaml --live -v`).
+    for p in sub.choices.values():
+        p.add_argument("-v", "--verbose", action="store_true", default=argparse.SUPPRESS, help="log which locator matched each field")
     return ap
 
 

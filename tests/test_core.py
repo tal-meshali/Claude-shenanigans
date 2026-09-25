@@ -152,3 +152,12 @@ def test_mock_applicants_never_reach_a_production_portal(tanzania_batch):
         applicant.mock = False
     with pytest.raises(SafetyError, match="--live"):
         check_safety(get_site("tanzania"), tanzania_batch, RunOptions())
+
+
+def test_verbose_flag_is_accepted_before_or_after_the_subcommand():
+    from evisa.cli import build_parser
+
+    ap = build_parser()
+    assert ap.parse_args(["-v", "apply", "b.yaml", "--live"]).verbose
+    assert ap.parse_args(["apply", "b.yaml", "--live", "-v"]).verbose
+    assert not ap.parse_args(["apply", "b.yaml"]).verbose
