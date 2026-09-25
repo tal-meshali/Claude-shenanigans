@@ -1,4 +1,12 @@
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 .pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Run artefacts: screenshots, reports (contain application IDs and security answers)
+runs/
 evisa_output/

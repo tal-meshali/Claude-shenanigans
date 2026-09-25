@@ -1,0 +1,134 @@
+{
+  "country": "tanzania",
+  "trip": {
+    "purpose": "tourism",
+    "arrival_date": "2026-12-20",
+    "departure_date": "2027-01-03",
+    "port_of_entry": "Kilimanjaro International Airport",
+    "port_of_exit": "Abeid Amani Karume International Airport",
+    "arrival_flight": "ET 815",
+    "carrier": "Ethiopian Airlines",
+    "departure_country": "ISR",
+    "departure_city": "Tel Aviv",
+    "accommodation": {
+      "name": "Specimen Safari Lodge",
+      "address": "Plot 12, Serengeti Road",
+      "city": "Arusha",
+      "phone": "+255700000001",
+      "email": "bookings@specimen-lodge.example"
+    }
+  },
+  "extra": {
+    "tanzania": {
+      "security_question": "What is the name of your first school?",
+      "security_answer": "Specimen Elementary"
+    }
+  },
+  "applicants": [
+    {
+      "ref": "dana-specimen",
+      "mock": true,
+      "passport": {
+        "number": "S1234567",
+        "issuing_country": "ISR",
+        "nationality": "ISR",
+        "surname": "Specimen",
+        "given_names": "Dana Noa",
+        "sex": "F",
+        "date_of_birth": "1988-04-12",
+        "place_of_birth": "Haifa",
+        "country_of_birth": "ISR",
+        "date_of_issue": "2022-03-01",
+        "date_of_expiry": "2032-02-28",
+        "issuing_authority": "Mock Population Authority"
+      },
+      "contact": {
+        "email": "dana.specimen@example.com",
+        "phone": "+972501234567",
+        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+      },
+      "occupation": "Software Engineer",
+      "marital_status": "married",
+      "father_name": "Avi Specimen",
+      "mother_name": "Rina Specimen"
+    },
+    {
+      "ref": "omer-specimen",
+      "mock": true,
+      "passport": {
+        "number": "S7654321",
+        "issuing_country": "ISR",
+        "nationality": "ISR",
+        "surname": "Specimen",
+        "given_names": "Omer",
+        "sex": "M",
+        "date_of_birth": "1986-09-30",
+        "place_of_birth": "Jerusalem",
+        "country_of_birth": "ISR",
+        "date_of_issue": "2021-07-15",
+        "date_of_expiry": "2031-07-14",
+        "issuing_authority": "Mock Population Authority"
+      },
+      "contact": {
+        "email": "omer.specimen@example.com",
+        "phone": "+972527654321",
+        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+      },
+      "occupation": "Architect",
+      "marital_status": "married"
+    },
+    {
+      "ref": "maya-specimen",
+      "mock": true,
+      "passport": {
+        "number": "S2468024",
+        "issuing_country": "ISR",
+        "nationality": "ISR",
+        "surname": "Specimen",
+        "given_names": "Maya",
+        "sex": "F",
+        "date_of_birth": "2016-01-05",
+        "place_of_birth": "Tel Aviv",
+        "country_of_birth": "ISR",
+        "date_of_issue": "2024-01-10",
+        "date_of_expiry": "2029-01-09",
+        "issuing_authority": "Mock Population Authority"
+      },
+      "contact": {
+        "email": "dana.specimen@example.com",
+        "phone": "+972501234567",
+        "address": {"line1": "1 Example Street", "city": "Tel Aviv", "postal_code": "6100001", "country": "ISR"}
+      },
+      "occupation": "Student",
+      "marital_status": "single",
+      "father_name": "Omer Specimen",
+      "mother_name": "Dana Specimen"
+    },
+    {
+      "ref": "sam-specimen",
+      "mock": true,
+      "passport": {
+        "number": "U9081726",
+        "issuing_country": "USA",
+        "nationality": "USA",
+        "surname": "Specimen",
+        "given_names": "Sam Alex",
+        "sex": "M",
+        "date_of_birth": "1990-11-02",
+        "place_of_birth": "Boston",
+        "country_of_birth": "USA",
+        "date_of_issue": "2023-05-20",
+        "date_of_expiry": "2033-05-19",
+        "issuing_authority": "Mock Department of State"
+      },
+      "contact": {
+        "email": "sam.specimen@example.com",
+        "phone": "+16175550123",
+        "address": {"line1": "100 Sample Ave", "city": "Boston", "state": "MA", "postal_code": "02101", "country": "USA"}
+      },
+      "occupation": "Teacher",
+      "marital_status": "single",
+      "trip": {"departure_country": "USA", "departure_city": "Boston"}
+    }
+  ]
+}
