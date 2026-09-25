@@ -37,6 +37,7 @@ class MockPerson:
     issue_date: date
     occupation: str
     title: str
+    relationship: str = ""
 
     @property
     def expiry_date(self) -> date:
@@ -45,11 +46,11 @@ class MockPerson:
 
 MOCK_PEOPLE = [
     MockPerson("Dupont", "Jean Pierre", "M", date(1984, 3, 14), "FRA", "Lyon", "24FR81234",
-               date(2024, 2, 1), "Engineer", "Mr"),
+               date(2024, 2, 1), "Engineer", "MR", "Self"),
     MockPerson("Dupont", "Marie Claire", "F", date(1987, 11, 2), "FRA", "Marseille", "23FR55120",
-               date(2023, 6, 20), "Teacher", "Mrs"),
+               date(2023, 6, 20), "Teacher", "MRS", "Spouse"),
     MockPerson("Dupont", "Lucas", "M", date(2014, 7, 30), "FRA", "Paris", "25FR00731",
-               date(2025, 1, 9), "Student", "Master"),
+               date(2025, 1, 9), "Student", "MASTER", "Child"),
 ]
 
 
@@ -124,6 +125,14 @@ def draw_passport(person: MockPerson) -> Image.Image:
     return img.convert("RGB")
 
 
+class _BlockDumper(yaml.SafeDumper):
+    """Write multi-line strings (the MRZ) as readable `|` blocks."""
+
+
+_BlockDumper.add_representer(str, lambda dumper, value: dumper.represent_scalar(
+    "tag:yaml.org,2002:str", value, style="|" if "\n" in value else None))
+
+
 def generate(out_dir: str | Path, people: list[MockPerson] | None = None, arrival_in_days: int = 30) -> Path:
     """Write passport scans, photos and applicants.yaml into out_dir; return the YAML path."""
     out = Path(out_dir)
@@ -148,7 +157,7 @@ def generate(out_dir: str | Path, people: list[MockPerson] | None = None, arriva
             "country_of_birth": p.nationality,
             "passport_issue_date": p.issue_date.isoformat(),
             "occupation": p.occupation,
-            "home_address": "12 Rue de la Paix, 75002 Paris, France",
+            "relationship": p.relationship,
             "passport_image": f"passports/{slug}.png",
             "photo": f"photos/{slug}.jpg",
         })
@@ -157,27 +166,36 @@ def generate(out_dir: str | Path, people: list[MockPerson] | None = None, arriva
     doc = {
         "mode": "group",
         "visa_type": "tourist",
-        "locale": "fr_FR",
         "trip": {
             "arrival_date": arrival.isoformat(),
-            "duration_days": 21,
+            "departure_country": "FRA",
+            "visa_days": 30,
             "purpose": "Tourism",
             "port_of_departure": "Paris CDG",
-            "mode_of_travel": "Air",
+            "airline": "SriLankan Airlines",
             "flight_number": "UL564",
             "address_in_sri_lanka": "Galle Face Hotel, 2 Galle Road, Colombo 03",
         },
         "contact": {
             "email": "jean.dupont@example.com",
-            "phone": "+33612345678",
-            "address": "12 Rue de la Paix, 75002 Paris, France",
+            "telephone": "+33612345678",
+            "address_line1": "12 Rue de la Paix",
+            "city": "Paris",
+            "state": "Ile-de-France",
+            "postal_code": "75002",
+            "country": "FRA",
+        },
+        "declarations": {
+            "has_residence_visa": False,
+            "currently_in_sri_lanka": False,
+            "has_multiple_entry_visa": False,
         },
         "beneficiaries": beneficiaries,
     }
     path = out / "applicants.yaml"
     path.write_text(
         "# MOCK DATA — fictitious people for testing against the local mock site only.\n"
-        + yaml.safe_dump(doc, sort_keys=False, allow_unicode=True),
+        + yaml.dump(doc, Dumper=_BlockDumper, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
     return path

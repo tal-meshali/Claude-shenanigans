@@ -40,11 +40,11 @@ class Beneficiary:
     passport_issue_date: date
     passport_expiry_date: date
     passport_issuing_country: str = ""
-    title: str = ""  # Mr / Mrs / Ms ...
+    title: str = ""  # MR / MRS / MS / MISS / MASTER / DR
     occupation: str = ""
-    home_address: str = ""
-    passport_image: Path | None = None  # scan of the passport bio page
-    photo: Path | None = None  # passport-style photo
+    relationship: str = ""  # for group members, e.g. "Spouse", "Child"
+    passport_image: Path | None = None  # scan of the passport bio page (source of the MRZ)
+    photo: Path | None = None  # passport-style photo, for portals that ask for one
 
     @property
     def full_name(self) -> str:
@@ -52,29 +52,42 @@ class Beneficiary:
 
     @property
     def resolved_title(self) -> str:
-        return self.title or ("Mr" if self.sex == "M" else "Ms")
+        if self.title:
+            return self.title.upper().rstrip(".")
+        return "MR" if self.sex == "M" else "MS"
 
 
 @dataclass
 class Trip:
     arrival_date: date
-    duration_days: int
+    departure_country: str  # ISO3: where the travellers are in the 14 days before travel
+    visa_days: int = 30
     purpose: str = "Tourism"
     port_of_departure: str = ""
-    mode_of_travel: str = "Air"  # Air / Sea
+    airline: str = ""
     flight_number: str = ""
     address_in_sri_lanka: str = ""
-
-    @property
-    def departure_date(self) -> date:
-        return self.arrival_date + timedelta(days=self.duration_days)
 
 
 @dataclass
 class Contact:
     email: str
-    phone: str
-    address: str = ""
+    telephone: str
+    address_line1: str
+    city: str
+    state: str
+    country: str  # ISO3
+    address_line2: str = ""
+    postal_code: str = ""
+    mobile: str = ""
+
+
+@dataclass
+class Declarations:
+    """The yes/no questions at the end of the ETA form."""
+    has_residence_visa: bool = False
+    currently_in_sri_lanka: bool = False
+    has_multiple_entry_visa: bool = False
 
 
 @dataclass
@@ -83,9 +96,8 @@ class Application:
     contact: Contact
     beneficiaries: list[Beneficiary]
     mode: str = "group"  # "group": one application for everyone; "individual": one per beneficiary
-    visa_type: str = "tourist"
-    locale: str = "fr_FR"
-    extra: dict[str, Any] = field(default_factory=dict)
+    visa_type: str = "tourist"  # tourist / business / transit
+    declarations: Declarations = field(default_factory=Declarations)
 
     def validate(self, today: date | None = None) -> list[str]:
         """Return a list of problems; raise nothing so the CLI can print them all."""
@@ -93,6 +105,8 @@ class Application:
         problems: list[str] = []
         if self.mode not in ("group", "individual"):
             problems.append(f"mode must be 'group' or 'individual', not {self.mode!r}")
+        if self.visa_type not in ("tourist", "business", "transit"):
+            problems.append(f"visa_type must be tourist, business or transit, not {self.visa_type!r}")
         if not self.beneficiaries:
             problems.append("at least one beneficiary is required")
         if self.mode == "group" and len(self.beneficiaries) < 2:
@@ -101,8 +115,10 @@ class Application:
             problems.append(f"contact.email is not a valid address: {self.contact.email!r}")
         if self.trip.arrival_date < today:
             problems.append("trip.arrival_date is in the past")
-        if not 1 <= self.trip.duration_days <= 30:
-            problems.append("trip.duration_days must be 1-30 for a tourist ETA")
+        if self.trip.visa_days not in (30, 90):
+            problems.append("trip.visa_days must be 30 or 90")
+        if self.trip.address_in_sri_lanka and len(self.trip.address_in_sri_lanka) > 250:
+            problems.append("trip.address_in_sri_lanka is longer than 250 characters")
 
         for i, b in enumerate(self.beneficiaries, 1):
             who = f"beneficiary #{i} ({b.full_name})"
@@ -112,6 +128,8 @@ class Application:
                 problems.append(f"{who}: date_of_birth must be in the past")
             if b.passport_issue_date > today:
                 problems.append(f"{who}: passport_issue_date is in the future")
+            if not re.fullmatch(r"[A-Z0-9]{5,12}", b.passport_number):
+                problems.append(f"{who}: passport_number must be 5-12 letters/digits")
             # Sri Lanka requires at least 6 months of passport validity on arrival.
             if b.passport_expiry_date < self.trip.arrival_date + timedelta(days=183):
                 problems.append(f"{who}: passport must be valid 6 months beyond arrival")
@@ -134,8 +152,8 @@ def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
         m = parse_td3(*pair)
         # Explicit values in the file win over what the MRZ says.
         for key, value in {
-            "surname": m.surname.title(),
-            "given_names": m.given_names.title(),
+            "surname": m.surname,
+            "given_names": m.given_names,
             "sex": m.sex,
             "date_of_birth": m.date_of_birth,
             "nationality": m.nationality,
@@ -161,6 +179,9 @@ def _beneficiary_from_dict(raw: dict[str, Any], base_dir: Path) -> Beneficiary:
         if raw.get(key):
             raw[key] = (base_dir / raw[key]).resolve()
     raw["sex"] = str(raw["sex"]).upper()[:1]
+    # The portal only accepts upper-case names and passport numbers.
+    for key in ("surname", "given_names", "passport_number"):
+        raw[key] = str(raw[key]).upper().strip()
     for key in ("nationality", "country_of_birth", "passport_issuing_country"):
         raw[key] = str(raw[key]).upper()
     return Beneficiary(**raw)
@@ -188,8 +209,12 @@ def load_application(path: str | Path) -> Application:
     try:
         trip_raw = dict(raw["trip"])
         trip_raw["arrival_date"] = _to_date(trip_raw["arrival_date"], "trip.arrival_date")
+        trip_raw["departure_country"] = str(trip_raw["departure_country"]).upper()
         trip = Trip(**trip_raw)
-        contact = Contact(**raw["contact"])
+        contact_raw = dict(raw["contact"])
+        contact_raw["country"] = str(contact_raw["country"]).upper()
+        contact = Contact(**{k: str(v) for k, v in contact_raw.items()})
+        declarations = Declarations(**raw.get("declarations", {}))
         beneficiaries = [_beneficiary_from_dict(b, base_dir) for b in raw["beneficiaries"]]
     except (KeyError, TypeError) as exc:
         raise ValidationError(f"{path}: invalid application file: {exc}") from exc
@@ -199,6 +224,5 @@ def load_application(path: str | Path) -> Application:
         beneficiaries=beneficiaries,
         mode=raw.get("mode", "group" if len(beneficiaries) > 1 else "individual"),
         visa_type=raw.get("visa_type", "tourist"),
-        locale=raw.get("locale", "fr_FR"),
-        extra=raw.get("extra", {}),
+        declarations=declarations,
     )

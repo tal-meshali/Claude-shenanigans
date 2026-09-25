@@ -1,180 +1,234 @@
-# Site profile for the Sri Lanka ETA portal (https://eta.gov.lk/slvisa/).
+# Site profile for the Sri Lanka ETA portal (https://eta.gov.lk/etaslvisa/).
 #
-# Every element is located by trying, in order:
-#   1. `selectors`  - CSS selectors (first match wins)
-#   2. `labels`     - regexes matched against the field's <label> (EN + FR)
-#   3. `texts`      - regexes matched against button / link captions (clickables only)
-# so the automation keeps working in either locale and survives small markup
-# changes. If the portal changes, run with --headful --debug, look at the saved
-# HTML in the output folder and adjust the selectors here - no code change needed.
+# Element lookup order: `selectors` (CSS) -> `labels` (regex on the field's
+# label) -> `texts` (regex on button/link captions). `kind` is inferred from the
+# element (select / checkbox / radio / date / text) unless given. `value_map`
+# turns our canonical values into what the site uses; `required: false` skips a
+# field quietly when it is absent.
 #
-# `kind` is inferred from the element when omitted (select / checkbox / radio /
-# file / date / text). `value_map` translates our canonical values into the
-# option texts/values the site may use. `required: false` skips a field quietly
-# when it is not on the page.
+# Mapped from the live site on 2026-09-25 (snapshots in mock_site/portal_snapshot/):
+#   VERIFIED    terms page, category page, individual form, group trip/contact form
+#   UNVERIFIED  group member form, review page, payment options, gateway - those
+#               pages only appear after submitting real data. They use generic
+#               selectors + text matching; check them on your first --headful run.
 
 name: Sri Lanka ETA (eta.gov.lk)
-start_path: "/slvisa/visainfo/center.jsp?locale={locale}"
-date_format: "%d/%m/%Y"
+start_path: "/etaslvisa/pages/termnconuser.jsp?ucode=123"
+# The portal redirects to plain http:// mid-flow; keep the session on https.
+force_https: true
+date_format: "%m-%d-%Y"
 
-# How to tell we reached the external payment gateway.
-payment_url_patterns: ["ipg", "payment", "paycorp", "gateway", "checkout", "mastercard", "pay"]
+# Alerts/pages meaning the whole session is dead.
+fatal_texts: ["Session Expired"]
+
+# How to tell we reached the external payment gateway (URL substrings).
+payment_url_patterns: ["ipg", "payment", "paycorp", "gateway", "checkout", "mastercard", "sampath", "boc", "hnb", "pay"]
 
 captcha:
-  selectors: ["img[src*='captcha' i]", "iframe[src*='recaptcha']", ".g-recaptcha", "iframe[src*='hcaptcha']"]
-  # Text box to type the captcha answer in, when it is an image captcha.
-  input: {selectors: ["input[name*='captcha' i]", "#captcha"], labels: ["captcha", "code de sécurité", "security code"]}
+  # The portal loads reCAPTCHA but its check is currently commented out.
+  selectors: ["iframe[src*='recaptcha/api2/anchor']", ".g-recaptcha:visible", "iframe[src*='hcaptcha']"]
 
 error_banner:
-  selectors: [".error:visible", ".alert-danger:visible", "#errorMsg:visible", ".errorMessage:visible"]
+  selectors: ["span.error:visible:not(:empty)", ".alert-danger:visible"]
 
-reference_regex: "\\b(?:ETA|REF)[-_ ]?[A-Z0-9]{6,}\\b|\\b[A-Z]{2}\\d{8,}\\b"
+# Reference shown after submission (first capture group is used when present).
+reference_regex: "(?:ETA\\s*)?(?:Reference|Ref\\.?|Application)\\s*(?:No\\.?|Number)?\\s*[:\\-]?\\s*([A-Z0-9][A-Z0-9-]{5,})"
 
 steps:
-  start:
+  terms:
     click:
-      selectors: ["a[href*='apply.jsp']", "a[href*='etaNavServ']"]
-      texts: ["^\\s*Apply( for (a|an) (visa|ETA))?\\s*$", "Demander (un )?(visa|ETA)", "Faire une demande", "^\\s*Postuler"]
+      selectors: ["input[name='terms'][value='yes']"]
+      labels: ["I Agree"]
 
-  eligibility:
-    fields:
-      visa_type:
-        selectors: ["select[name='visaType']", "#visaType"]
-        labels: ["^\\s*(Visa type|Type de visa)", "Catégorie", "Category"]
-        value_map:
-          tourist: ["TOURIST", "Tourist", "Touris", "Tourisme", "Tourist ETA"]
-          business: ["BUSINESS", "Business", "Affaires"]
-          transit: ["TRANSIT", "Transit"]
-      application_type:
-        kind: radio
-        options:
-          individual:
-            selectors: ["input[name='appType'][value='individual' i]", "input[value='INDIVIDUAL']"]
-            labels: ["^\\s*(Individual|Individuelle?)\\b"]
-          group:
-            selectors: ["input[name='appType'][value='group' i]", "input[value='GROUP']"]
-            labels: ["^\\s*(Group|Groupe)\\b"]
-      accept_terms:
-        kind: checkbox
-        selectors: ["input[name='agree']", "#agree", "input[name*='terms' i]"]
-        labels: ["(I )?(agree|accept)", "J'accepte", "conditions"]
-    next:
-      selectors: ["#btnNext", "input[type=submit][name='next']"]
-      texts: ["^\\s*(Next|Suivant|Continue|Continuer)\\b"]
+  category:
+    # ids of the <a> links on the "Online Visa Application" page
+    link_ids:
+      tourist: {individual: "1", group: "2"}
+      business: {individual: "21", group: "32"}
+      transit: {individual: "5", group: "6"}
 
-  trip:
-    fields:
-      purpose:
-        required: false
-        labels: ["Purpose of (visit|travel)", "(Motif|But) du (voyage|séjour|visite)"]
-        value_map:
-          Tourism: ["Tourism", "Sightseeing", "Tourisme", "Holiday", "Vacances"]
-      arrival_date:
-        selectors: ["#arrivalDate", "input[name='arrivalDate']"]
-        labels: ["(Intended )?(date of )?arrival", "Date (prévue )?d'arrivée"]
-      duration_days:
-        selectors: ["#stayDays", "input[name='stayDays']"]
-        labels: ["(Duration|Length) of stay", "Durée du séjour"]
-      mode_of_travel:
-        required: false
-        labels: ["Mode of travel", "Moyen de transport", "Mode de (voyage|transport)"]
-        value_map:
-          Air: ["AIR", "Air", "By Air", "Avion", "Aérien"]
-          Sea: ["SEA", "Sea", "By Sea", "Mer", "Maritime"]
-      port_of_departure:
-        required: false
-        labels: ["Port of departure", "(Port|Lieu|Aéroport) de départ"]
-      flight_number:
-        required: false
-        labels: ["(Airline|Flight|Vessel).*(No|number)", "N(°|o|uméro) de vol"]
-      address_in_sri_lanka:
-        labels: ["Address in Sri Lanka", "Adresse au Sri Lanka"]
-      email:
-        labels: ["^\\s*E-?mail", "Courriel", "Adresse (e-mail|électronique)"]
-      email_confirm:
-        required: false
-        labels: ["(Confirm|Re-?enter).*e-?mail", "Confirme[rz].*(e-?mail|courriel)"]
-      phone:
-        labels: ["(Mobile|Telephone|Phone)", "(Téléphone|Portable|Mobile)"]
-      contact_address:
-        required: false
-        labels: ["(Contact|Postal|Mailing) address", "Adresse (de contact|postale)"]
-    next:
-      texts: ["^\\s*(Next|Suivant|Continue|Continuer)\\b"]
-
-  beneficiary:
-    fields:
-      title:
-        required: false
-        labels: ["^\\s*(Title|Titre|Civilité)"]
-        value_map:
-          Mr: ["Mr", "Mr.", "M.", "Monsieur"]
-          Mrs: ["Mrs", "Mrs.", "Mme", "Madame"]
-          Ms: ["Ms", "Ms.", "Miss", "Mlle", "Mme", "Madame"]
-          Master: ["Master", "Mstr", "Mr", "M."]
+  # One page with the applicant, travel, address, contact and declarations.
+  individual_form:
+    fields: &person_fields
       surname:
-        selectors: ["#surname", "input[name='surname']"]
-        labels: ["^\\s*(Surname|Family name|Last name|Nom de famille)", "^\\s*Nom\\b"]
+        selectors: ["#surname"]
+        labels: ["^\\s*Surname"]
       given_names:
-        selectors: ["#otherNames", "input[name='otherNames']"]
-        labels: ["(Other|Given|First) names?", "Prénoms?"]
+        selectors: ["#othernames"]
+        labels: ["Other/Given Names"]
+      title:
+        selectors: ["#title"]
+        value_map: &titles
+          MR: ["MR"]
+          MRS: ["MRS"]
+          MS: ["MS"]
+          MISS: ["MISS"]
+          MASTER: ["MASTER"]
+          DR: ["DR"]
+          REV: ["REV"]
       date_of_birth:
-        labels: ["Date of birth", "Date de naissance"]
+        selectors: ["#bdate"]
+      date_of_birth_confirm:
+        selectors: ["#reenteredbdate"]
       sex:
-        labels: ["^\\s*(Gender|Sex|Sexe|Genre)"]
-        value_map:
-          M: ["M", "MALE", "Male", "Masculin", "Homme"]
-          F: ["F", "FEMALE", "Female", "Féminin", "Femme"]
+        selectors: ["#gender"]
+        value_map: &genders
+          M: ["Male"]
+          F: ["Female"]
       nationality:
-        labels: ["^\\s*(Nationality|Nationalité)"]
+        selectors: ["#national"]
         value_map: countries
       country_of_birth:
-        required: false
-        labels: ["Country of birth", "Pays de naissance"]
+        selectors: ["#conbirth"]
         value_map: countries
       occupation:
         required: false
-        labels: ["Occupation", "Profession"]
+        selectors: ["#occupation"]
       passport_number:
-        labels: ["Passport (No|number)", "N(°|uméro) (de|du) passeport"]
-      passport_issuing_country:
-        required: false
-        labels: ["(Issuing country|Country of issue|Place of issue)", "Pays de délivrance", "Lieu de délivrance"]
-        value_map: countries
+        selectors: ["#passportno"]
+        # onchange asks the server to check number + nationality, then sets this flag
+        wait_for: "#idHiddenPassOk[value='1']"
+      passport_number_confirm:
+        selectors: ["#reenteredpassportno"]
       passport_issue_date:
-        labels: ["(Passport )?(date of )?issue( date)?", "Date de délivrance"]
+        selectors: ["#pidate"]
       passport_expiry_date:
-        labels: ["(Passport )?(date of )?expir", "Date d'expiration"]
-      home_address:
-        required: false
-        labels: ["(Home|Residential|Permanent) address", "Adresse (du domicile|permanente|de résidence)"]
-      passport_image:
-        kind: file
-        required: false
-        selectors: ["input[type=file][name*='passport' i]"]
-        labels: ["(Passport|bio).*(copy|page|scan|upload)", "(Copie|Scan|Page).*(passeport)"]
-      photo:
-        kind: file
-        required: false
-        selectors: ["input[type=file][name*='photo' i]"]
-        labels: ["^\\s*Photo", "Photographie", "Photo d'identité"]
-    add_another:
-      texts: ["Add (another )?(member|applicant|person)", "Ajouter (un )?(autre )?(membre|demandeur|voyageur)"]
-    next:
-      texts: ["^\\s*(Next|Suivant|Continue|Continuer)\\b"]
-
-  review:
-    fields:
-      declaration:
+        selectors: ["#pedate"]
+      departure_country:
+        selectors: ["#fromDeparture"]
+        value_map: countries
+      visa_days:
+        selectors: ["#RequestedVisaDays"]
+      arrival_date:
+        selectors: ["#iadate"]
+      purpose:
+        selectors: ["#puofvisit"]
+        value_map: &purposes
+          Tourism: ["V01", "Sightseeing or Holidaying"]
+          Visiting: ["V02", "Visiting friends and relatives"]
+          Medical: ["V03", "Medical treatment including Ayurvedic (herbal)"]
+          MICE: ["V10"]
+          Wedding: ["V11", "Participate in Weddings"]
+          Pilgrimage: ["V12", "Participate in Pilgrimages"]
+          Sport: ["V13", "Participate in Sport Events"]
+          Arts: ["V14", "Participate in Art, Music, and Dance Events"]
+      port_of_departure: {required: false, selectors: ["#depcity"]}
+      airline: {required: false, selectors: ["#airline"]}
+      flight_number: {required: false, selectors: ["#flightno"]}
+      address_line1: {selectors: ["#addone"]}
+      address_line2: {required: false, selectors: ["#addtwo"]}
+      city: {selectors: ["#city"]}
+      state: {selectors: ["#state"]}
+      postal_code: {required: false, selectors: ["#zipcode"]}
+      country:
+        selectors: ["#adcountry"]
+        value_map: countries
+      address_in_sri_lanka: {selectors: ["#addinsl"]}
+      email: {selectors: ["#email"]}
+      email_confirm: {selectors: ["#reenteremail"]}
+      telephone: {selectors: ["#telephon"]}
+      mobile: {required: false, selectors: ["#mobileno"]}
+      q_residence_visa: &q1
+        kind: radio
+        options:
+          "yes": {selectors: ["#vlrYQN1"]}
+          "no": {selectors: ["#vlrNQN1"]}
+      q_currently_in_sri_lanka: &q2
+        kind: radio
+        options:
+          "yes": {selectors: ["#vlrYQN2"]}
+          "no": {selectors: ["#vlrNQN2"]}
+      q_multiple_entry_visa: &q3
+        kind: radio
+        options:
+          "yes": {selectors: ["#vlrYQN3"]}
+          "no": {selectors: ["#vlrNQN3"]}
+      confirm_info: &conf
         kind: checkbox
-        required: false
-        labels: ["(I )?(declare|certify|confirm)", "Je (déclare|certifie|confirme)"]
-    submit:
-      texts: ["^\\s*(Confirm|Submit|Confirmer|Soumettre|Valider)"]
+        selectors: ["input[name='conf']"]
+    next:
+      selectors: ["#submitButton"]
+      texts: ["^\\s*Next\\s*$"]
 
-  confirmation:
+  # Group page 1: travel + contact details shared by every member.
+  group_form:
+    fields:
+      departure_country: {selectors: ["#idfromDeparture"], value_map: countries}
+      visa_days: {selectors: ["#RequestedVisaDays"]}
+      arrival_date: {selectors: ["#idArrivalDate"]}
+      purpose: {selectors: ["#idPuofvisit"], value_map: *purposes}
+      port_of_departure: {required: false, selectors: ["#idDepcity"]}
+      airline: {required: false, selectors: ["#idAirline"]}
+      flight_number: {required: false, selectors: ["#idFlightno"]}
+      address_line1: {selectors: ["#idContAddOne"]}
+      address_line2: {required: false, selectors: ["#idContAddTwo"]}
+      city: {selectors: ["#idContCity"]}
+      state: {selectors: ["#idContState"]}
+      postal_code: {required: false, selectors: ["#idContZipCode"]}
+      country: {selectors: ["#idConCountry"], value_map: countries}
+      telephone: {selectors: ["#idContPhoneNo"]}
+      mobile: {required: false, selectors: ["#idContMobileno"]}
+      email: {selectors: ["#idContEmail"]}
+      email_confirm: {selectors: ["#idReEnterEmail"]}
+      address_in_sri_lanka: {required: false, selectors: ["#idContactAddSL"]}
+    next:
+      selectors: ["input[name='next'][onclick*='validateGroupForm1']"]
+      texts: ["^\\s*Next\\s*$"]
+
+  # UNVERIFIED: member page(s). Element ids come from the portal's
+  # GroupApplication.js; dates may be one box or year/month/day parts.
+  member_form:
+    # true: fill a member, press "add", repeat, then press "next" once.
+    # false: fill a member and press "next" to reach the following member.
+    add_each: true
+    fields:
+      surname: {selectors: ["#idSurname"], labels: ["^\\s*Surname"]}
+      given_names: {selectors: ["#idOthernames"], labels: ["Other/Given Names"]}
+      title: {selectors: ["#idTitle"], labels: ["^\\s*Title"], value_map: *titles}
+      sex: {selectors: ["#idGender"], labels: ["^\\s*Gender"], value_map: *genders}
+      nationality: {selectors: ["#idNatinality"], labels: ["Nationality"], value_map: countries}
+      country_of_birth: {selectors: ["#idCOB"], labels: ["Country or Region of Birth"], value_map: countries}
+      occupation: {required: false, selectors: ["#idOccupation"], labels: ["Occupation"]}
+      relationship: {required: false, selectors: ["#idRelationShip"], labels: ["Relationship"]}
+      passport_number: {selectors: ["#idPassportNo"], labels: ["^\\s*Passport Number"]}
+      passport_number_confirm: {required: false, labels: ["Re.?Enter Passport Number"]}
+      date_of_birth:
+        labels: ["^\\s*Date of Birth"]
+        parts: {year: {selectors: ["#idDobYear"]}, month: {selectors: ["#idDobMonth"]}, day: {selectors: ["#idDobDate"]}}
+      date_of_birth_confirm: {required: false, labels: ["Re.?Enter Date of Birth"]}
+      passport_issue_date:
+        labels: ["Passport Issued Date"]
+        parts: {year: {selectors: ["#idPassIsueYear"]}, month: {selectors: ["#idPassIsueMonth"]}, day: {selectors: ["#idPassIsueDate"]}}
+      passport_expiry_date:
+        labels: ["Passport Expiry Date"]
+        parts: {year: {selectors: ["#idPassExpYear"]}, month: {selectors: ["#idPassExpMonth"]}, day: {selectors: ["#idPassExpDate"]}}
+      q_residence_visa: {<<: *q1, required: false}
+      q_currently_in_sri_lanka: {<<: *q2, required: false}
+      q_multiple_entry_visa: {<<: *q3, required: false}
+      confirm_info: {<<: *conf, required: false}
+    add_another:
+      selectors: ["input[onclick*='addMember' i]", "input[name='add' i]"]
+      texts: ["^\\s*Add( Member| Applicant| Another)?\\s*$", "^\\s*Save( Member)?\\s*$"]
+    next:
+      selectors: ["input[name='next']", "#submitButton"]
+      texts: ["^\\s*(Next|Continue|Proceed|Finish)\\s*$"]
+
+  # UNVERIFIED: review page. The portal's confirmForm() asks two confirm() dialogs.
+  review:
+    submit:
+      selectors: ["input[onclick*='confirmForm']", "button[onclick*='confirmForm']"]
+      texts: ["^\\s*Confirm\\s*$"]
+
+  # UNVERIFIED: payment options page ("3. Payment Options").
+  payment_options:
+    fields:
+      method:
+        kind: radio
+        required: false
+        options:
+          card: {labels: ["(Credit|Debit|Visa|Master ?Card|Card)"]}
     pay:
-      texts: ["Pay (now|online)?", "Payer( maintenant| en ligne)?", "Proceed to payment", "Procéder au paiement"]
+      texts: ["^\\s*Pay( Now| Online)?\\s*$", "Proceed to (Payment|Pay)", "^\\s*(Next|Proceed|Continue)\\s*$"]
 
 payment_gateway:
   # Hosted payment pages often render card inputs in iframes; all frames are searched.

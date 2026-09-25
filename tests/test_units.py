@@ -32,7 +32,7 @@ def test_mock_data_loads_and_validates(tmp_path):
     assert app.mode == "group" and len(app.beneficiaries) == 3
     assert app.validate() == []
     lucas = app.beneficiaries[2]
-    assert lucas.given_names == "Lucas" and lucas.passport_image.is_file()
+    assert lucas.given_names == "LUCAS" and lucas.passport_image.is_file()
 
 
 def test_validation_catches_short_passport_validity(tmp_path):

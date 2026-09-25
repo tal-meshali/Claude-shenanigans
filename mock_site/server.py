@@ -1,13 +1,19 @@
-"""A local stand-in for the Sri Lanka ETA portal and its payment gateway.
+"""A local stand-in for the Sri Lanka ETA portal (eta.gov.lk/etaslvisa) and a
+payment gateway, for exercising the automation without touching the real site.
 
-It mimics the flow (French locale) closely enough to exercise the automation
-end to end without touching the real government site:
+Pages saved from the live portal (mock_site/portal_snapshot/) are served with
+the portal's own JavaScript, so its client-side validation really runs:
 
-  center.jsp -> apply.jsp (visa type, individual/group, terms)
-  -> trip & contact -> one form per traveller (+ "add another member")
-  -> review -> confirmation with reference -> external payment gateway
-  (card form inside an iframe) -> payment result.
+  termnconuser.jsp -> terms ("I Agree")            [real page]
+  -> category links (Tourist Individual / Group)   [rebuilt from the real page]
+  -> individual form                                [real page]
+     or group travel & contact form                 [real page]
+        -> member form(s), "Add Member" / "Next"    [stand-in]
+  -> review with confirmForm() dialogs              [stand-in]
+  -> reference + payment options -> gateway         [stand-in]
 
+The portal's server-side AJAX checks (DWR) are stubbed to "OK"; passport
+number "REJECT123" is refused, to test that path.
 Test cards: 4111 1111 1111 1111 is approved, 4000 0000 0000 0002 is declined.
 State for assertions is exposed as JSON at /__state.
 """
@@ -21,61 +27,74 @@ import re
 import secrets
 import threading
 from datetime import date, datetime
-from email.parser import BytesParser
-from email.policy import HTTP
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+SNAPSHOT = Path(__file__).parent / "portal_snapshot"
 FEE_USD = 50
-COUNTRIES = [("250", "FRA", "France"), ("276", "DEU", "Allemagne"), ("826", "GBR", "Royaume-Uni"),
-             ("840", "USA", "États-Unis"), ("376", "ISR", "Israël"), ("356", "IND", "Inde"),
-             ("724", "ESP", "Espagne"), ("380", "ITA", "Italie")]
+NAV = "/etaslvisa/etaNavServ"
+CATEGORY_IDS = {"1": ("tourist", "INDIVIDUAL"), "2": ("tourist", "GROUP"), "21": ("business", "INDIVIDUAL"),
+                "32": ("business", "GROUP"), "5": ("transit", "INDIVIDUAL"), "6": ("transit", "GROUP")}
+COUNTRIES = [("FRA", "FRANCE (FRA)"), ("DEU", "GERMANY (DEU)"), ("GBR", "UNITED KINGDOM (GBR)"),
+             ("USA", "UNITED STATES (USA)"), ("ISR", "ISRAEL (ISR)"), ("IND", "INDIA (IND)")]
 
 SESSIONS: dict[str, dict] = {}
 PAYMENTS: dict[str, dict] = {}
 LOCK = threading.Lock()
+
+DWR_STUB = """var %(obj)s = new Proxy({}, {get: function (t, method) { return function () {
+  var args = Array.prototype.slice.call(arguments), cb = args[args.length - 1];
+  var answer = (method === 'validateIndPassport' && args[0] === 'REJECT123')
+      ? 'This passport number is not allowed' : null;
+  if (typeof cb === 'function') setTimeout(function () { cb(answer); }, 50);
+}; }});"""
 
 
 def esc(v: object) -> str:
     return html.escape(str(v))
 
 
-def page(title: str, body: str, error: str = "") -> str:
-    err = f'<div class="error" role="alert">{esc(error)}</div>' if error else ""
-    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{esc(title)}</title>
-<style>body{{font-family:sans-serif;max-width:760px;margin:2em auto}} label{{display:block;margin-top:.7em}}
-.error{{background:#fdd;border:1px solid #c00;padding:.6em}} .upload input{{position:absolute;opacity:0;width:1px}}
-.upload span{{border:1px solid #888;padding:.2em .6em}}</style></head>
-<body><h1>{esc(title)}</h1>{err}{body}</body></html>"""
+def page(title: str, body: str, error: str = "", scripts: str = "") -> str:
+    err = f'<span class="error" style="color:red">{esc(error)}</span>' if error else ""
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{esc(title)}</title>{scripts}
+<style>body{{font-family:sans-serif;max-width:820px;margin:2em auto}} td{{padding:3px 6px}}</style></head>
+<body><h2>{esc(title)}</h2>{err}{body}</body></html>"""
 
 
-def text_input(name: str, label: str, value: str = "", tag: str = "input") -> str:
-    if tag == "textarea":
-        return f'<label for="{name}">{label}</label><textarea id="{name}" name="{name}">{esc(value)}</textarea>'
-    return f'<label for="{name}">{label}</label><input id="{name}" name="{name}" value="{esc(value)}">'
-
-
-def select(name: str, label: str, options: list[tuple[str, str]]) -> str:
-    opts = '<option value="">-- Choisir --</option>' + "".join(
-        f'<option value="{esc(v)}">{esc(t)}</option>' for v, t in options)
-    return f'<label for="{name}">{label}</label><select id="{name}" name="{name}">{opts}</select>'
-
-
-def country_select(name: str, label: str) -> str:
-    # Values are numeric codes so the automation must match on the visible French name.
-    return select(name, label, [(num, fr) for num, _, fr in COUNTRIES])
-
-
-def parse_date(value: str) -> date | None:
+def parse_mdy(value: str) -> date | None:
     try:
-        return datetime.strptime(value, "%d/%m/%Y").date()
+        return datetime.strptime(value, "%m-%d-%Y").date()
     except ValueError:
         return None
 
 
+def select(id_: str, name: str, options: list[tuple[str, str]]) -> str:
+    opts = '<option value="0X">[Select Please]</option>' + "".join(
+        f'<option value="{esc(v)}">{esc(t)}</option>' for v, t in options)
+    return f'<select id="{id_}" name="{name}">{opts}</select>'
+
+
+def row(label: str, control: str) -> str:
+    return f'<tr><td class="inner_text_1">{label}<font color="#FF0000">*</font></td><td>{control}</td></tr>'
+
+
+def date_parts(prefix: str, name: str, years: range) -> str:
+    return (select(f"id{prefix}Year", f"{name}Year", [(str(y), str(y)) for y in years])
+            + select(f"id{prefix}Month", f"{name}Month", [(f"{m:02d}", f"{m:02d}") for m in range(1, 13)])
+            + select(f"id{prefix}Date", f"{name}Date", [(f"{d:02d}", f"{d:02d}") for d in range(1, 32)]))
+
+
+def parts_date(f: dict[str, str], name: str) -> date | None:
+    try:
+        return date(int(f[f"{name}Year"]), int(f[f"{name}Month"]), int(f[f"{name}Date"]))
+    except (KeyError, ValueError):
+        return None
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MockETA/1.0"
+    server_version = "MockETA/2.0"
 
     def log_message(self, fmt: str, *args: object) -> None:  # quiet
         pass
@@ -83,52 +102,40 @@ class Handler(BaseHTTPRequestHandler):
     # --------------------------------------------------------------- plumbing
     def session(self) -> tuple[str, dict]:
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
-        sid = cookie["SID"].value if "SID" in cookie else ""
+        sid = cookie["JSESSIONID"].value if "JSESSIONID" in cookie else ""
         with LOCK:
             if sid not in SESSIONS:
                 sid = secrets.token_hex(8)
                 SESSIONS[sid] = {"members": [], "status": "new"}
             return sid, SESSIONS[sid]
 
-    def send(self, body: str, status: int = 200, sid: str | None = None, ctype: str = "text/html") -> None:
-        data = body.encode()
+    def send(self, body: str | bytes, status: int = 200, sid: str | None = None, ctype: str = "text/html") -> None:
+        data = body.encode() if isinstance(body, str) else body
         self.send_response(status)
         self.send_header("Content-Type", f"{ctype}; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         if sid:
-            self.send_header("Set-Cookie", f"SID={sid}; Path=/")
+            self.send_header("Set-Cookie", f"JSESSIONID={sid}; Path=/; HttpOnly")
         self.end_headers()
         self.wfile.write(data)
 
     def redirect(self, location: str, sid: str | None = None) -> None:
-        self.send_response(303)
+        self.send_response(302)
         self.send_header("Location", location)
         if sid:
-            self.send_header("Set-Cookie", f"SID={sid}; Path=/")
+            self.send_header("Set-Cookie", f"JSESSIONID={sid}; Path=/; HttpOnly")
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def form(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
-        length = int(self.headers.get("Content-Length", 0))
-        raw = self.rfile.read(length)
-        ctype = self.headers.get("Content-Type", "")
-        if ctype.startswith("multipart/form-data"):
-            msg = BytesParser(policy=HTTP).parsebytes(
-                f"Content-Type: {ctype}\r\n\r\n".encode() + raw)
-            fields, files = {}, {}
-            for part in msg.iter_parts():
-                name = part.get_param("name", header="content-disposition")
-                filename = part.get_filename()
-                payload = part.get_payload(decode=True) or b""
-                if filename is not None:
-                    files[name] = (filename, payload)
-                else:
-                    fields[name] = payload.decode()
-            return fields, files
-        return {k: v[0] for k, v in parse_qs(raw.decode(), keep_blank_values=True).items()}, {}
+    def form(self) -> dict[str, str]:
+        raw = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8", "replace")
+        return {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
 
-    # ------------------------------------------------------------------ pages
-    def do_GET(self) -> None:  # noqa: C901 - a router
+    def snapshot(self, name: str, sid: str) -> None:
+        self.send((SNAPSHOT / name).read_bytes(), sid=sid)
+
+    # ------------------------------------------------------------------ GET
+    def do_GET(self) -> None:
         url = urlparse(self.path)
         path, query = url.path, parse_qs(url.query)
         sid, s = self.session()
@@ -136,21 +143,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/__state":
             return self.send(json.dumps({"sessions": SESSIONS, "payments": PAYMENTS}, default=str),
                              ctype="application/json")
-        if path in ("/", "/slvisa/visainfo/center.jsp"):
-            return self.send(page("Centre ETA — Sri Lanka",
-                '<p>Bienvenue sur le système ETA.</p><ul>'
-                '<li><a href="/slvisa/visainfo/apply.jsp?locale=fr_FR">Demander un visa</a></li>'
-                '<li><a href="/slvisa/visainfo/status.jsp">Vérifier le statut</a></li></ul>'), sid=sid)
-        if path == "/slvisa/visainfo/apply.jsp":
-            return self.send(self.apply_page(), sid=sid)
-        if path == "/slvisa/eta/trip":
-            return self.send(self.trip_page(), sid=sid)
-        if path == "/slvisa/eta/member":
-            return self.send(self.member_page(s), sid=sid)
-        if path == "/slvisa/eta/review":
-            return self.send(self.review_page(s), sid=sid)
-        if path == "/slvisa/eta/confirmation":
-            return self.send(self.confirmation_page(s), sid=sid)
+        if path == "/etaslvisa/pages/termnconuser.jsp":
+            s.update(members=[], status="new")
+            return self.redirect(f"{NAV}?payType=1", sid)
+        if path == NAV:
+            return self.snapshot("eta_terms.html", sid)
+        if path.startswith("/etaslvisa/js/"):
+            file = (SNAPSHOT / path.removeprefix("/etaslvisa/")).resolve()
+            if SNAPSHOT in file.parents and file.is_file():
+                return self.send(file.read_bytes(), ctype="application/javascript")
+        if path.startswith("/etaslvisa/dwr/interface/"):
+            return self.send(DWR_STUB % {"obj": Path(path).stem}, ctype="application/javascript")
+        if path == "/etaslvisa/dwr/engine.js":
+            return self.send("", ctype="application/javascript")
         if path == "/ipg/pay":
             return self.send(self.gateway_page(query.get("session", [""])[0]))
         if path == "/ipg/card-frame":
@@ -158,191 +163,187 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ipg/result":
             p = PAYMENTS.get(query.get("session", [""])[0], {})
             if p.get("status") == "paid":
-                return self.send(page("Paiement accepté",
-                    f"<p>Paiement réussi pour la demande {esc(p['ref'])}. Montant : {p['amount']} USD.</p>"))
-            return self.send(page("Paiement refusé", "<p>Transaction refusée par la banque émettrice.</p>"))
-        self.send(page("404", "<p>Introuvable</p>"), status=404)
+                return self.send(page("Payment Successful",
+                    f"<p>Transaction approved for ETA {esc(p['ref'])}. Amount: {p['amount']}.00 USD.</p>"))
+            return self.send(page("Payment Failed", "<p>Transaction declined by the issuing bank.</p>"))
+        self.send(page("404", "<p>Not found</p>"), status=404)
 
-    def do_POST(self) -> None:
+    # ----------------------------------------------------------------- POST
+    def do_POST(self) -> None:  # noqa: C901 - a router
         path = urlparse(self.path).path
         sid, s = self.session()
-        fields, files = self.form()
+        f = self.form()
 
-        if path == "/slvisa/eta/start":
-            errors = []
-            if fields.get("visaType") != "TOURIST":
-                errors.append("Veuillez choisir le type de visa.")
-            if fields.get("appType") not in ("INDIVIDUAL", "GROUP"):
-                errors.append("Veuillez choisir le type de demande.")
-            if fields.get("agree") != "on":
-                errors.append("Vous devez accepter les conditions.")
-            if errors:
-                return self.send(self.apply_page(" ".join(errors)), sid=sid)
-            s.update(visa_type=fields["visaType"], app_type=fields["appType"], members=[], status="draft")
-            return self.redirect("/slvisa/eta/trip", sid)
-
-        if path == "/slvisa/eta/trip":
-            required = ["purpose", "arrivalDate", "stayDays", "travelMode", "addressSL", "email", "emailConfirm",
-                        "mobile"]
-            missing = [k for k in required if not fields.get(k)]
-            arrival = parse_date(fields.get("arrivalDate", ""))
-            if missing:
-                return self.send(self.trip_page(f"Champs obligatoires manquants : {', '.join(missing)}"), sid=sid)
-            if not arrival or arrival < date.today():
-                return self.send(self.trip_page("Date d'arrivée invalide (JJ/MM/AAAA)."), sid=sid)
-            if fields["email"] != fields["emailConfirm"]:
-                return self.send(self.trip_page("Les adresses e-mail ne correspondent pas."), sid=sid)
-            if not fields["stayDays"].isdigit() or not 1 <= int(fields["stayDays"]) <= 30:
-                return self.send(self.trip_page("Durée du séjour invalide."), sid=sid)
-            s["trip"] = fields
-            return self.redirect("/slvisa/eta/member", sid)
-
-        if path == "/slvisa/eta/member":
-            error = self.validate_member(fields, files)
-            if error:
-                return self.send(self.member_page(s, error), sid=sid)
-            member = dict(fields)
-            member.pop("action", None)
-            member["files"] = {k: {"filename": v[0], "size": len(v[1])} for k, v in files.items()}
-            s["members"].append(member)
-            if fields.get("action") == "add":
-                if s.get("app_type") != "GROUP":
-                    return self.send(self.member_page(s, "Ajout impossible : demande individuelle."), sid=sid)
-                return self.redirect("/slvisa/eta/member", sid)
-            return self.redirect("/slvisa/eta/review", sid)
-
-        if path == "/slvisa/eta/submit":
-            if fields.get("declaration") != "on":
-                return self.send(self.review_page(s, "Veuillez cocher la déclaration."), sid=sid)
-            if s.get("app_type") == "GROUP" and len(s["members"]) < 2:
-                return self.send(self.review_page(s, "Un groupe doit compter au moins deux membres."), sid=sid)
-            s["reference"] = "ETA-" + secrets.token_hex(5).upper()
-            s["status"] = "submitted"
-            return self.redirect("/slvisa/eta/confirmation", sid)
+        if path == NAV:
+            if f.get("terms") == "yes":
+                s["status"] = "terms"
+                return self.send(self.category_page(), sid=sid)
+            if f.get("pageNumber") == "2" and f.get("appType") in CATEGORY_IDS:
+                if s.get("status") != "terms":
+                    return self.send(self.expired(), sid=sid)
+                s["visa_type"], s["app_type"] = CATEGORY_IDS[f["appType"]]
+                s["status"] = "form"
+                return self.snapshot("eta_individual_form.html" if s["app_type"] == "INDIVIDUAL"
+                                     else "eta_group_trip_form.html", sid)
+            if "surname" in f and s.get("app_type") == "INDIVIDUAL":
+                error = self.validate_individual(f)
+                if error:
+                    return self.send(page("Error", f"<p>{esc(error)}</p>"), sid=sid, status=400)
+                s["trip"] = {k: f.get(k, "") for k in ("fromDeparture", "RequestedVisaDays", "iadate", "puofvisit",
+                             "depcity", "airline", "flightno", "addone", "city", "state", "adcountry",
+                             "addinsl", "email", "telephon")}
+                s["members"] = [{k: f.get(k, "") for k in ("title", "surname", "othernames", "bdate", "gender",
+                                 "national", "conbirth", "passportno", "pidate", "pedate", "QN1", "QN2", "QN3")}]
+                s["status"] = "review"
+                return self.send(self.review_page(s), sid=sid)
+            if "conAddOne" in f and s.get("app_type") == "GROUP":
+                missing = [k for k in ("fromDeparture", "arrivalDate", "puofvisit", "conAddOne", "contCity",
+                                       "contState", "conCountry", "contPhoneNo", "contEmail") if f.get(k, "0X") in ("", "0X")]
+                if missing or not parse_mdy(f["arrivalDate"]) or f["contEmail"] != f.get("reEnterEmail"):
+                    return self.send(page("Error", f"<p>Invalid group details {missing}</p>"), sid=sid, status=400)
+                s["trip"] = f
+                s["members"] = []
+                return self.send(self.member_page(s), sid=sid)
+            if f.get("memberAction") in ("add", "next") and s.get("app_type") == "GROUP":
+                if f["memberAction"] == "add":
+                    error = self.validate_member(f)
+                    if error:
+                        return self.send(self.member_page(s, error), sid=sid)
+                    s["members"].append({k: v for k, v in f.items() if k != "memberAction"})
+                    return self.send(self.member_page(s), sid=sid)
+                if len(s["members"]) < 2:
+                    return self.send(self.member_page(s, "A group needs at least two members."), sid=sid)
+                s["status"] = "review"
+                return self.send(self.review_page(s), sid=sid)
+            if f.get("actiontype") == "2" and s.get("status") == "review":
+                s["reference"] = "LK" + secrets.token_hex(5).upper()
+                s["status"] = "submitted"
+                return self.send(self.payment_options_page(s), sid=sid)
+            return self.send(self.expired(), sid=sid)
 
         if path == "/ipg/checkout":
-            if s.get("status") != "submitted" or fields.get("ref") != s.get("reference"):
-                return self.send(page("Erreur", "<p>Session de paiement invalide.</p>"), status=400)
+            if s.get("status") != "submitted" or f.get("ref") != s.get("reference"):
+                return self.send(page("Error", "<p>Invalid payment session.</p>"), status=400)
+            if f.get("payMethod") != "CARD":
+                return self.send(page("Error", "<p>Please select a payment method.</p>"), status=400)
             token = secrets.token_urlsafe(12)
             PAYMENTS[token] = {"ref": s["reference"], "amount": FEE_USD * len(s["members"]), "status": "pending"}
             return self.redirect(f"/ipg/pay?session={token}")
 
         if path == "/ipg/submit":
-            token = fields.get("session", "")
+            token = f.get("session", "")
             p = PAYMENTS.get(token)
             if not p or p["status"] != "pending":
-                return self.send(page("Erreur", "<p>Session expirée.</p>"), status=400)
-            number = fields.get("cardNumber", "").replace(" ", "")
-            valid = (re.fullmatch(r"\d{13,19}", number) and fields.get("expMonth") and fields.get("expYear")
-                     and re.fullmatch(r"\d{3,4}", fields.get("cvc", "")))
+                return self.send(page("Error", "<p>Session expired.</p>"), status=400)
+            number = f.get("cardNumber", "").replace(" ", "")
+            valid = (re.fullmatch(r"\d{13,19}", number) and f.get("expMonth") and f.get("expYear")
+                     and re.fullmatch(r"\d{3,4}", f.get("cvc", "")))
             p["status"] = "paid" if valid and number == "4111111111111111" else "declined"
             p["card_last4"] = number[-4:]
             return self.redirect(f"/ipg/result?session={token}")
 
-        self.send(page("404", "<p>Introuvable</p>"), status=404)
+        self.send(page("404", "<p>Not found</p>"), status=404)
 
-    # --------------------------------------------------------------- builders
-    def apply_page(self, error: str = "") -> str:
-        return page("Demande d'ETA", f"""
-<form method="post" action="/slvisa/eta/start">
-{select("visaType", "Type de visa", [("TOURIST", "ETA Touriste"), ("BUSINESS", "ETA Affaires"),
-                                      ("TRANSIT", "ETA Transit")])}
-<fieldset><legend>Type de demande</legend>
-<input type="radio" id="t1" name="appType" value="INDIVIDUAL"><label for="t1">Individuelle</label>
-<input type="radio" id="t2" name="appType" value="GROUP"><label for="t2">Groupe (famille, voyage organisé)</label>
-</fieldset>
-<input type="checkbox" id="agree" name="agree"><label for="agree">J'accepte les conditions générales</label>
-<p><button type="submit">Suivant</button></p></form>""", error)
-
-    def trip_page(self, error: str = "") -> str:
-        return page("Voyage et coordonnées", f"""
-<form method="post" action="/slvisa/eta/trip">
-{select("purpose", "Motif du séjour", [("SIGHTSEEING", "Tourisme"), ("VISIT", "Visite familiale"),
-                                        ("MEDICAL", "Soins médicaux")])}
-{text_input("arrivalDate", "Date prévue d'arrivée (JJ/MM/AAAA)")}
-{text_input("stayDays", "Durée du séjour (jours)")}
-{select("travelMode", "Moyen de transport", [("AIR", "Avion"), ("SEA", "Mer")])}
-{text_input("departurePort", "Port de départ")}
-{text_input("flightNo", "Numéro de vol")}
-{text_input("addressSL", "Adresse au Sri Lanka", tag="textarea")}
-{text_input("email", "Adresse e-mail")}
-{text_input("emailConfirm", "Confirmez l'adresse e-mail")}
-{text_input("mobile", "Téléphone mobile")}
-{text_input("postalAddress", "Adresse postale", tag="textarea")}
-<p><button type="submit">Continuer</button></p></form>""", error)
-
-    def member_page(self, s: dict, error: str = "") -> str:
-        n = len(s["members"]) + 1
-        add = ('<button type="submit" name="action" value="add">Ajouter un autre membre</button> '
-               if s.get("app_type") == "GROUP" else "")
-        return page(f"Voyageur n° {n}", f"""
-<form method="post" action="/slvisa/eta/member" enctype="multipart/form-data">
-{select("title", "Titre", [("MR", "M."), ("MRS", "Mme"), ("MS", "Mlle"), ("MSTR", "Master")])}
-{text_input("surname", "Nom de famille")}
-{text_input("otherNames", "Prénoms")}
-{text_input("dob", "Date de naissance (JJ/MM/AAAA)")}
-{select("gender", "Sexe", [("1", "Masculin"), ("2", "Féminin")])}
-{country_select("nationality", "Nationalité")}
-{country_select("birthCountry", "Pays de naissance")}
-{text_input("occupation", "Profession")}
-{text_input("passportNo", "Numéro du passeport")}
-{country_select("issueCountry", "Pays de délivrance")}
-{text_input("issueDate", "Date de délivrance (JJ/MM/AAAA)")}
-{text_input("expiryDate", "Date d'expiration (JJ/MM/AAAA)")}
-{text_input("homeAddress", "Adresse du domicile", tag="textarea")}
-<label class="upload" for="passportCopy">Copie de la page du passeport
- <input type="file" id="passportCopy" name="passportCopy" accept="image/*,.pdf"><span>Parcourir…</span></label>
-<label class="upload" for="photo">Photo d'identité
- <input type="file" id="photo" name="photo" accept="image/*"><span>Parcourir…</span></label>
-<p>{add}<button type="submit" name="action" value="next">Continuer</button></p></form>""", error)
-
-    def validate_member(self, f: dict[str, str], files: dict[str, tuple[str, bytes]]) -> str:
-        required = ["title", "surname", "otherNames", "dob", "gender", "nationality", "passportNo",
-                    "issueDate", "expiryDate"]
-        missing = [k for k in required if not f.get(k)]
+    # ------------------------------------------------------------- validation
+    def validate_individual(self, f: dict[str, str]) -> str:
+        required = ["surname", "othernames", "title", "bdate", "gender", "national", "conbirth", "passportno",
+                    "pidate", "pedate", "fromDeparture", "RequestedVisaDays", "iadate", "puofvisit", "addone",
+                    "city", "state", "adcountry", "addinsl", "email", "telephon", "QN1", "QN2", "QN3", "conf"]
+        missing = [k for k in required if f.get(k, "0X") in ("", "0X")]
         if missing:
-            return f"Champs obligatoires manquants : {', '.join(missing)}"
-        for key in ("dob", "issueDate", "expiryDate"):
-            if not parse_date(f[key]):
-                return f"Format de date invalide pour {key} (JJ/MM/AAAA)."
-        if parse_date(f["expiryDate"]) <= date.today():
-            return "Le passeport a expiré."
-        if not re.fullmatch(r"[A-Z0-9]{6,12}", f["passportNo"]):
-            return "Numéro de passeport invalide."
-        for key in ("passportCopy", "photo"):
-            _, data = files.get(key, ("", b""))
-            if not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8") or data.startswith(b"%PDF")):
-                return f"Fichier manquant ou invalide : {key}"
+            return f"missing: {missing}"
+        if not all(parse_mdy(f[k]) for k in ("bdate", "pidate", "pedate", "iadate")):
+            return "dates must be mm-dd-yyyy"
+        if f["bdate"] != f.get("reenteredbdate") or f["passportno"] != f.get("reenteredpassportno"):
+            return "re-entered values differ"
         return ""
 
-    def review_page(self, s: dict, error: str = "") -> str:
-        rows = "".join(f"<tr><td>{esc(m['surname'])}</td><td>{esc(m['otherNames'])}</td>"
-                       f"<td>{esc(m['passportNo'])}</td></tr>" for m in s["members"])
-        return page("Vérification", f"""
-<table border="1"><tr><th>Nom</th><th>Prénoms</th><th>Passeport</th></tr>{rows}</table>
-<p>Arrivée : {esc(s.get('trip', {}).get('arrivalDate', ''))}</p>
-<form method="post" action="/slvisa/eta/submit">
-<input type="checkbox" id="declaration" name="declaration">
-<label for="declaration">Je déclare que les informations fournies sont exactes</label>
-<p><button type="submit">Confirmer et soumettre</button></p></form>""", error)
+    def validate_member(self, f: dict[str, str]) -> str:
+        required = ["title", "surname", "othernames", "gender", "nationality", "cob", "passportNo"]
+        missing = [k for k in required if f.get(k, "0X") in ("", "0X")]
+        if missing:
+            return f"Please fill: {', '.join(missing)}"
+        dob, issued, expiry = parts_date(f, "dob"), parts_date(f, "passIsue"), parts_date(f, "passExp")
+        if not (dob and issued and expiry):
+            return "Please select valid dates"
+        if expiry <= date.today():
+            return "Passport has expired"
+        return ""
 
-    def confirmation_page(self, s: dict) -> str:
-        if s.get("status") != "submitted":
-            return page("Erreur", "<p>Aucune demande soumise.</p>")
+    # ----------------------------------------------------------- stand-in pages
+    def expired(self) -> str:
+        return page("ETA", '<script>alert("Session Expired !!!!"); window.close();</script>')
+
+    def category_page(self) -> str:
+        links = "".join(
+            f'<li><a href="#" onclick="submitformApp(this,\'appFormX\');" id="{i}" class="inner_text_1">'
+            f'{vt.title()} ETA - Apply for {"an Individual" if kind == "INDIVIDUAL" else "a Group"}</a></li>'
+            for i, (vt, kind) in CATEGORY_IDS.items())
+        return page("Online Visa Application", f"""
+<form method="POST" action="etaNavServ" name="appFormX"><ul>{links}</ul>
+<input type="hidden" name="payType" value="1"/><input type="hidden" name="appType" id='idAppType' />
+<input type="hidden" name="appSType" id='idAppType' value="0"/>
+<input type="hidden" name="pageNumber" id='idpageNumber' value="2" /></form>""",
+            scripts='<script src="js/com/etafunctional.js"></script>')
+
+    def member_page(self, s: dict, error: str = "") -> str:
+        members = "".join(f"<tr><td>{esc(m['surname'])}</td><td>{esc(m['othernames'])}</td>"
+                          f"<td>{esc(m['passportNo'])}</td></tr>" for m in s["members"])
+        countries = [(f"{c}", t) for c, t in COUNTRIES]
+        this_year = date.today().year
+        return page(f"Group Application - Member {len(s['members']) + 1}", f"""
+<table border="1"><tr><th>Surname</th><th>Other Names</th><th>Passport</th></tr>{members}</table>
+<form method="post" action="etaNavServ" name="form1"><table>
+{row('Title', select('idTitle', 'title', [('01|MR', 'MR'), ('02|MRS', 'MRS'), ('03|MISS', 'MISS'),
+                                          ('04|MS', 'MS'), ('05|MASTER', 'MASTER')]))}
+{row('Surname/Family Name', '<input id="idSurname" name="surname" oninput="limitInput(this);">')}
+{row('Other/Given Names', '<input id="idOthernames" name="othernames" oninput="limitInput(this);">')}
+{row('Date of Birth', date_parts('Dob', 'dob', range(this_year, 1900, -1)))}
+{row('Gender', select('idGender', 'gender', [('Male', 'Male'), ('Female', 'Female')]))}
+{row('Nationality', select('idNatinality', 'nationality', countries))}
+{row('Country or Region of Birth', select('idCOB', 'cob', countries))}
+{row('Occupation', '<input id="idOccupation" name="occupation">')}
+{row('Relationship', select('idRelationShip', 'relationship', [('01', 'Self'), ('02', 'Spouse'), ('03', 'Child'),
+                                                               ('04', 'Parent'), ('05', 'Friend')]))}
+{row('Passport Number', '<input id="idPassportNo" name="passportNo" oninput="limitInput(this);">')}
+{row('Passport Issued Date', date_parts('PassIsue', 'passIsue', range(this_year, this_year - 12, -1)))}
+{row('Passport Expiry Date', date_parts('PassExp', 'passExp', range(this_year, this_year + 12)))}
+</table><input type="hidden" name="memberAction" id="idMemberAction" value="">
+<input type="button" name="add" value="Add Member"
+  onclick="document.getElementById('idMemberAction').value='add'; this.form.submit();">
+<input type="button" name="next" value="Next"
+  onclick="document.getElementById('idMemberAction').value='next'; this.form.submit();">
+</form>""", error, scripts='<script src="js/grp/validateBusinessUI.js"></script>')
+
+    def review_page(self, s: dict) -> str:
+        rows = "".join(
+            f"<tr><td>{esc(m.get('surname'))}</td><td>{esc(m.get('othernames'))}</td>"
+            f"<td>{esc(m.get('passportno') or m.get('passportNo'))}</td></tr>" for m in s["members"])
+        return page("Review Information", f"""
+<p>Please review your application and confirm.</p>
+<table border="1"><tr><th>Surname</th><th>Other Names</th><th>Passport</th></tr>{rows}</table>
+<form method="post" action="etaNavServ" name="form2">
+<input type="hidden" name="actiontype" id="idActiontype" value="1">
+<input type="button" value="Edit" onclick="history.back()">
+<input type="button" value="Confirm" onclick="confirmForm(this);">
+</form>""", scripts='<script src="js/com/etafunctional.js"></script>')
+
+    def payment_options_page(self, s: dict) -> str:
         total = FEE_USD * len(s["members"])
-        return page("Demande enregistrée", f"""
-<p>Votre demande a été enregistrée. Numéro de référence : <strong>{esc(s['reference'])}</strong></p>
-<p>Nombre de voyageurs : {len(s['members'])} — Montant à payer : {total} USD</p>
+        return page("Payment Options", f"""
+<p>Your application has been submitted. ETA Reference No : <strong>{esc(s['reference'])}</strong></p>
+<p>Applicants: {len(s['members'])} &mdash; Amount due: {total}.00 USD</p>
 <form method="post" action="/ipg/checkout"><input type="hidden" name="ref" value="{esc(s['reference'])}">
-<button type="submit">Payer maintenant</button></form>""")
+<input type="radio" id="pmCard" name="payMethod" value="CARD"><label for="pmCard">Visa / Master Card</label>
+<input type="submit" value="Pay Now"></form>""")
 
     def gateway_page(self, token: str) -> str:
         p = PAYMENTS.get(token)
         if not p:
-            return page("Erreur", "<p>Session de paiement inconnue.</p>")
-        return page("Passerelle de paiement sécurisée", f"""
-<p>Marchand : Department of Immigration &amp; Emigration — Réf. {esc(p['ref'])} — {p['amount']} USD</p>
-<iframe src="/ipg/card-frame?session={esc(token)}" width="100%" height="420" title="Carte"></iframe>""")
+            return page("Error", "<p>Unknown payment session.</p>")
+        return page("Secure Payment Gateway", f"""
+<p>Merchant: Department of Immigration &amp; Emigration &mdash; Ref. {esc(p['ref'])} &mdash; {p['amount']}.00 USD</p>
+<iframe src="/ipg/card-frame?session={esc(token)}" width="100%" height="420" title="Card"></iframe>""")
 
     def card_frame(self, token: str) -> str:
         p = PAYMENTS.get(token, {"amount": 0})
@@ -350,12 +351,12 @@ class Handler(BaseHTTPRequestHandler):
         years = "".join(f'<option value="{y}">{y}</option>' for y in range(date.today().year, date.today().year + 12))
         return f"""<!doctype html><html><body><form method="post" action="/ipg/submit" target="_top">
 <input type="hidden" name="session" value="{esc(token)}">
-<label for="holder">Titulaire de la carte</label><input id="holder" name="cardHolder" autocomplete="cc-name">
-<label for="num">Numéro de carte</label><input id="num" name="cardNumber" autocomplete="cc-number">
-<label for="mm">Mois</label><select id="mm" name="expMonth"><option value="">MM</option>{months}</select>
-<label for="yy">Année</label><select id="yy" name="expYear"><option value="">AAAA</option>{years}</select>
-<label for="cvc">Cryptogramme (CVV)</label><input id="cvc" name="cvc" autocomplete="cc-csc">
-<button type="submit">Payer {p['amount']},00 USD</button></form></body></html>"""
+<label for="holder">Cardholder name</label><input id="holder" name="cardHolder" autocomplete="cc-name">
+<label for="num">Card number</label><input id="num" name="cardNumber" autocomplete="cc-number">
+<label for="mm">Month</label><select id="mm" name="expMonth"><option value="">MM</option>{months}</select>
+<label for="yy">Year</label><select id="yy" name="expYear"><option value="">YYYY</option>{years}</select>
+<label for="cvc">CVV</label><input id="cvc" name="cvc" autocomplete="cc-csc">
+<button type="submit">Pay {p['amount']}.00 USD</button></form></body></html>"""
 
 
 def serve(port: int = 8765, host: str = "127.0.0.1") -> ThreadingHTTPServer:
@@ -369,7 +370,7 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"Mock ETA portal on http://127.0.0.1:{args.port}/slvisa/visainfo/center.jsp")
+    print(f"Mock ETA portal on http://127.0.0.1:{args.port}/etaslvisa/pages/termnconuser.jsp?ucode=123")
     server.serve_forever()
 
 

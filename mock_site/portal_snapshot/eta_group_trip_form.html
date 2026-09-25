@@ -1,0 +1,2661 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+<head>
+    <title>Group Application</title>
+    <link href="css/mobitel_visa.css" rel="stylesheet" type="text/css">
+    </link>
+    <link href="css/eta_text.css" rel="stylesheet" type="text/css"/>
+    <link href="css/tooltps.css" rel="stylesheet" type="text/css"/>
+    <script type="text/javascript" src="js/grp/validateBusinessUI.js"></script>
+    <script type="text/javascript" src="js/grp/GroupApplication.js"></script>
+    <script type="text/javascript" src="js/ajax/Country.js"></script>
+    <script type='text/javascript' src='/etaslvisa/dwr/interface/exCountryAJAXJS.js'></script>
+    <script type="text/javascript" src="js/com/scw.js"></script>
+    <script type="text/javascript" src="js/com/etafunctional.js"></script>
+    <script type='text/javascript' src='js/ajax/Params.js'></script>
+    <script type='text/javascript' src='dwr/interface/paramListAJAXJS.js'></script>
+    <script type='text/javascript' src='dwr/engine.js'></script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <script type='text/javascript' src="js/ind/jquery-3.3.1.slim.min.js"></script>
+    <script type='text/javascript' src="js/ind/popper.min.js"></script>
+    <script type='text/javascript' src="js/ind/bootstrap.min.js"></script>
+
+
+    <script type='text/javascript' src='dwr/interface/ajaxValidate.js'></script>
+
+    
+    
+    
+    
+    
+    
+
+</HEAD>
+<style id="antiClickJack">body{display: none !important;}</style>
+<script type="text/javascript">
+    if(self === top){
+        var antiClickJack = document.getElementById("antiClickJack");
+        antiClickJack.parentNode.removeChild(antiClickJack);
+    }else{
+        top.location = self.location;
+    }
+
+    function checkAvailableOptionGRP(compt){
+        // alert("test");
+        comp = compt;
+        var days = compt.value;
+
+        let text='';
+        if(days=='30'){
+            text = "Please note that this ETA once issued is valid for 30 days from the first date of arrival to Sri Lanka. You are facilitated for double entry within 30 days from the date of the first arrival.\n\n" +
+                "Please be aware that the normal visa fee is applicable for the extension of 30 days ETA by the online portal (eservices.immigration.gov.lk/vs) or at the Head Office of the Department of Immigration & Emigration, Sri Lanka.";
+
+        }else if(days=='180'){
+            text= 'This ETA is valid for double entry within the first 30 days from the first date of arrival to Sri Lanka.  If you leave the country after 30 days of stay, the ETA obtained for 180 days will be cancelled.\n\n' +
+                'Please be aware that the normal visa fee is applicable for the extension of 180 days ETA by the online portal (eservices.immigration.gov.lk/vs) or at the Head Office of the Department of Immigration & Emigration, Sri Lanka.'
+        }
+        var isOK ='OK';
+
+        if (days=='30' || days=='180'){
+            if (confirm(text) == true) {
+                isOK ='OK';
+            } else {
+                isOK ='CANCELLED';
+                $('#RequestedVisaDays').prop('selectedIndex', 0);
+            }
+        }
+        if((document.getElementById('idAppType').value=='2' || document.getElementById('idAppType').value=='9') && isOK =='OK'){
+
+            if(days=='180'){
+                $('#idPuofvisit').prop('selectedIndex',0);
+                $("#V07").hide();
+                $("#V01").show();
+                $("#V02").show();
+                $("#V03").show();
+                $("#V10").show();
+                $("#V11").show();
+                $("#V12").show();
+                $("#V13").show();
+                $("#V14").show();
+            } else if(days=='90'){
+                $('#idPuofvisit').prop('selectedIndex',0);
+                $("#V07").hide();
+                $("#V01").show();
+                $("#V02").show();
+                $("#V03").show();
+                $("#V10").show();
+                $("#V11").show();
+                $("#V12").show();
+                $("#V13").show();
+                $("#V14").show();
+            } else{
+                $('#idPuofvisit').prop('selectedIndex',0);
+                $("#V07").hide();
+                $("#V01").show();
+                $("#V02").show();
+                $("#V03").show();
+                $("#V10").show();
+                $("#V11").show();
+                $("#V12").show();
+                $("#V13").show();
+                $("#V14").show();
+            }
+        }
+    }
+</script>
+<body onLoad="gropuAplicationOnload();">
+
+<table width="1024" border="0" align="center" cellpadding="0" cellspacing="0" class="appback">
+<tr>
+    <td align="center" valign="top" > 
+<table width="800" border="0" align="center" cellpadding="0" cellspacing="0" >
+  <tr>
+    <td align="left" valign="top">
+
+        <table width="800" height="99" border="0" cellpadding="0" cellspacing="0">
+          <tr>    
+            <td width="800" height="99" align="left" valign="top" class="boxboth"><table width="800" border="0" cellspacing="0" cellpadding="0" >
+                <tr> 
+                  <td height="80" align="left" valign="top" ><img src="images/apptitle.jpg" width="800" height="85"> 
+                  </td>
+                </tr>  
+                
+              </table> </td>
+          </tr>
+         
+        </table></td>
+  </tr>
+</table>
+</td>
+</tr>
+</table>
+
+
+<table width="1024" border="0" align="center" cellpadding="0" cellspacing="0" class="appback">
+<tbody>
+<tr>
+<td width="1024" align="center" valign="top">
+<table width="800" border="0" align="center" cellpadding="0" cellspacing="0">
+<tbody>
+<tr>
+<td align="left" valign="top">
+<table width="800" border="0" cellpadding="0" cellspacing="0"
+       bgcolor="#FFFFFF">
+<tbody>
+<tr>
+<td align="center" valign="top">
+<table width="800" height="364" border="0" cellpadding="0"
+       cellspacing="0">
+<tr>
+<td width="5" height="364" align="left" valign="top"
+    class="boxleft">&nbsp;</td>
+<td width="790" align="left" valign="top">
+<table width="793" border="0" cellspacing="0"
+       cellpadding="0">
+<tr>
+
+    <td width="180" height="20" align="left"
+        valign="top"></td>
+    <td width="613" height="20" align="left"
+        valign="top"></td>
+</tr>
+<tr>
+    <td height="20" align="left"
+        valign="top"></td>
+    <td width="615" height="45" align="right" valign="top"><img src="images/1.jpg" width="600" height="30"></td>
+</tr>
+<tr>
+<td align="left"
+    valign="top">
+    <table width="160" border="0" cellpadding="0" cellspacing="0" class="input_field_1">
+        <tr>
+            <td width="160">
+                <table border="0" cellspacing="0" cellpadding="3">
+                    
+                    <tr>
+                        <td width="15" height="25" align="center" valign="middle">&nbsp;</td>
+                        <td width="165" align="left" valign="middle"><span class="textHeadingBlack">Tourist
+                                                ETA</span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><a href="#" tabindex="50"
+                                                            onClick="submitformApp(this,'form1');" id="1"
+                                                            class="inner_text_1">Apply
+                            for an Individual</a></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="2" class="inner_text_1">Apply
+                            for Group</a></span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="9" class="inner_text_1">Apply
+                            for a Third Party </a></span></td>
+                    </tr>
+                    <tr align="center">
+                        <td height="5" colspan="2" valign="middle">&nbsp;</td>
+                    </tr>
+                    
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="textHeadingBlack">Business Purpose
+                                                ETA</span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="21" class="inner_text_1">Apply
+                            for an Individual</a></span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="32" class="inner_text_1">Apply
+                            for a Group</a></span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="43" class="inner_text_1">Apply
+                            for a Third Party </a></span></td>
+                    </tr>
+                    <tr align="center">
+                        <td height="5" colspan="2" valign="middle">&nbsp;</td>
+                    </tr>
+                    <!-- end of adding back Business purpose to online site 2015/Nov/18 by gayanb-->
+
+
+                    
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="textHeadingBlack">Transit
+                                                ETA</span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="5" class="inner_text_1">Apply
+                            for an Individual</a></span></td>
+                    </tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle" class="inner_text_1"><a href="#" tabindex="50"
+                                                                                 onClick="submitformApp(this,'form1');"
+                                                                                 id="6" class="inner_text_1">Apply
+                            for a Group</a></td>
+                    </tr>
+                    <tr>
+                    <tr>
+                        <td height="25" align="center" valign="middle">&nbsp;</td>
+                        <td align="left" valign="middle"><span class="inner_text_1"><a href="#" tabindex="50"
+                                                                                       onClick="submitformApp(this,'form1');"
+                                                                                       id="11" class="inner_text_1">Apply
+                            for a Third Party </a></span></td>
+                    </tr>
+                    
+                </table>
+            </td>
+        </tr>
+    </table>
+</td>
+<td width="612" align="center"
+    valign="top">
+<form action="etaNavServ" method="post" name="form1" id="idMainformC">
+<input type="hidden" name="viewType" value="1"/>
+<input type="hidden" name="fromPage" value="null"/>
+<input type="hidden" name="hiddenpuofvisit" id="idHiddenPOV"/>
+<input type="hidden" name="payType" value="1"/>
+<input type="hidden" name="appType" id='idAppType' value="2"/>
+<input type="hidden" name="appSType" id='idAppSType' value="1"/>
+<table width="587" height="31" border="0" cellpadding="0" cellspacing="0">
+    <tr class="menu_text_th">
+        <td width="8" align="left" valign="middle"><img src="images/left_corner_1.png" width="8" height="31"/></td>
+        <td width="571" align="left" valign="middle" background="images/middle_line_1.gif" class="menu_text_th">Travel
+            Information -Tourist -  Group
+        </td>
+        <td width="10" align="left" valign="middle"><img src="images/right_corner_1.png" width="8" height="31"/></td>
+    </tr>
+</table>
+<table width="587" border="0" cellpadding="0" cellspacing="0" class="tableBLR_Line">
+
+<input type="hidden"
+       id="hiddenTrvlInfo"
+       value="1"/>
+<tr>
+    <td align="center" valign="top">
+        <table width="562" border="0" cellpadding="0" cellspacing="5">
+            <tr>
+                <td colspan="3"><span class="textHeadingBlackDATE">Note that now it is 00:46:55 AM on 2026-09-26  in Sri Lanka </span>
+                </td>
+            </tr>
+            <tr align="left" valign="middle" class="body_text_th">
+                <td width="141" height="30" class="inner_text_1"> Where you have been during last 14 days before this travel<font color="#FF0000">*</font></td>
+                <td height="30">
+                    <select name="fromDeparture" title="Please select Country" tabindex="0" id="idfromDeparture" class="inner_text_box_man" style="width:150px" onChange="checkCOVIDGroup(this);">
+                        <option value="0X">[Select Departure Country or Region]
+                        </option>
+                        
+                        <option value="AFG">AFGHANISTAN (AFG)
+                        </option>
+
+                        
+                        <option value="ALB">ALBANIA (ALB)
+                        </option>
+
+                        
+                        <option value="DZA">ALGERIA (El Djazaïr) (DZA)
+                        </option>
+
+                        
+                        <option value="ASM">AMERICAN SAMOA (ASM)
+                        </option>
+
+                        
+                        <option value="AND">ANDORRA (AND)
+                        </option>
+
+                        
+                        <option value="AGO">ANGOLA (AGO)
+                        </option>
+
+                        
+                        <option value="AIA">ANGUILLA (AIA)
+                        </option>
+
+                        
+                        <option value="ATA">ANTARCTICA (ATA)
+                        </option>
+
+                        
+                        <option value="ATG">ANTIGUA AND BARBUDA (ATG)
+                        </option>
+
+                        
+                        <option value="ARG">ARGENTINA (ARG)
+                        </option>
+
+                        
+                        <option value="ARM">ARMENIA (ARM)
+                        </option>
+
+                        
+                        <option value="ABW">ARUBA (ABW)
+                        </option>
+
+                        
+                        <option value="AUS">AUSTRALIA (AUS)
+                        </option>
+
+                        
+                        <option value="AUT">AUSTRIA (AUT)
+                        </option>
+
+                        
+                        <option value="AZE">AZERBAIJAN (AZE)
+                        </option>
+
+                        
+                        <option value="BHS">BAHAMAS (BHS)
+                        </option>
+
+                        
+                        <option value="BHR">BAHRAIN (BHR)
+                        </option>
+
+                        
+                        <option value="BGD">BANGLADESH (BGD)
+                        </option>
+
+                        
+                        <option value="BRB">BARBADOS (BRB)
+                        </option>
+
+                        
+                        <option value="BLR">BELARUS (BLR)
+                        </option>
+
+                        
+                        <option value="BEL">BELGIUM (BEL)
+                        </option>
+
+                        
+                        <option value="BLZ">BELIZE (BLZ)
+                        </option>
+
+                        
+                        <option value="BEN">BENIN (BEN)
+                        </option>
+
+                        
+                        <option value="BMU">BERMUDA (BMU)
+                        </option>
+
+                        
+                        <option value="BTN">BHUTAN (BTN)
+                        </option>
+
+                        
+                        <option value="BOL">BOLIVIA (BOL)
+                        </option>
+
+                        
+                        <option value="BES">BONAIRE, ST. EUSTATIUS, AND SABA (BES)
+                        </option>
+
+                        
+                        <option value="BIH">BOSNIA AND HERZEGOVINA (BIH)
+                        </option>
+
+                        
+                        <option value="BWA">BOTSWANA (BWA)
+                        </option>
+
+                        
+                        <option value="BVT">BOUVET ISLAND (BVT)
+                        </option>
+
+                        
+                        <option value="BRA">BRAZIL (BRA)
+                        </option>
+
+                        
+                        <option value="BRN">BRUNEI DARUSSALAM (BRN)
+                        </option>
+
+                        
+                        <option value="BGR">BULGARIA (BGR)
+                        </option>
+
+                        
+                        <option value="BFA">BURKINA FASO (BFA)
+                        </option>
+
+                        
+                        <option value="BDI">BURUNDI (BDI)
+                        </option>
+
+                        
+                        <option value="KHM">CAMBODIA (KHM)
+                        </option>
+
+                        
+                        <option value="CMR">CAMEROON (CMR)
+                        </option>
+
+                        
+                        <option value="CAN">CANADA (CAN)
+                        </option>
+
+                        
+                        <option value="CPV">CAPE VERDE (CPV)
+                        </option>
+
+                        
+                        <option value="CYM">CAYMAN ISLANDS (CYM)
+                        </option>
+
+                        
+                        <option value="CAF">CENTRAL AFRICAN REPUBLIC (CAF)
+                        </option>
+
+                        
+                        <option value="TCD">CHAD (Tchad) (TCD)
+                        </option>
+
+                        
+                        <option value="CHL">CHILE (CHL)
+                        </option>
+
+                        
+                        <option value="CHN">CHINA
+                        </option>
+
+                        
+                        <option value="CXR">CHRISTMAS ISLAND (CXR)
+                        </option>
+
+                        
+                        <option value="CCK">COCOS (KEELING) ISLANDS (CCK)
+                        </option>
+
+                        
+                        <option value="COL">COLOMBIA (COL)
+                        </option>
+
+                        
+                        <option value="COM">COMOROS (COM)
+                        </option>
+
+                        
+                        <option value="COG">CONGO, REPUBLIC OF (COG)
+                        </option>
+
+                        
+                        <option value="COD">CONGO, THE DEMOCRATIC REPUBLIC OF THE (COD)
+                        </option>
+
+                        
+                        <option value="COK">COOK ISLANDS (COK)
+                        </option>
+
+                        
+                        <option value="CRI">COSTA RICA (CRI)
+                        </option>
+
+                        
+                        <option value="HRV">CROATIA (Hrvatska) (HRV)
+                        </option>
+
+                        
+                        <option value="CUB">CUBA (CUB)
+                        </option>
+
+                        
+                        <option value="CUW">CURACAO (CUW)
+                        </option>
+
+                        
+                        <option value="CYP">CYPRUS (CYP)
+                        </option>
+
+                        
+                        <option value="CZE">CZECH REPUBLIC
+                        </option>
+
+                        
+                        <option value="CIV">CÔTE DIVOIRE (Ivory Coast) (CIV)
+                        </option>
+
+                        
+                        <option value="DNK">DENMARK (DNK)
+                        </option>
+
+                        
+                        <option value="DJI">DJIBOUTI (DJI)
+                        </option>
+
+                        
+                        <option value="DMA">DOMINICA (DMA)
+                        </option>
+
+                        
+                        <option value="DOM">DOMINICAN REPUBLIC (DOM)
+                        </option>
+
+                        
+                        <option value="ECU">ECUADOR (ECU)
+                        </option>
+
+                        
+                        <option value="EGY">EGYPT (EGY)
+                        </option>
+
+                        
+                        <option value="SLV">EL SALVADOR (SLV)
+                        </option>
+
+                        
+                        <option value="GNQ">EQUATORIAL GUINEA (GNQ)
+                        </option>
+
+                        
+                        <option value="ERI">ERITREA (ERI)
+                        </option>
+
+                        
+                        <option value="EST">ESTONIA (EST)
+                        </option>
+
+                        
+                        <option value="ETH">ETHIOPIA (ETH)
+                        </option>
+
+                        
+                        <option value="EU">EUROPEAN UNION (EU)
+                        </option>
+
+                        
+                        <option value="FRO">FAEROE ISLANDS (FRO)
+                        </option>
+
+                        
+                        <option value="FLK">FALKLAND ISLANDS (MALVINAS) (FLK)
+                        </option>
+
+                        
+                        <option value="FJI">FIJI (FJI)
+                        </option>
+
+                        
+                        <option value="FIN">FINLAND (FIN)
+                        </option>
+
+                        
+                        <option value="FRA">FRANCE (FRA)
+                        </option>
+
+                        
+                        <option value="FXX">FRANCE, Metropolitan (FXX)
+                        </option>
+
+                        
+                        <option value="GUF">FRENCH GUIANA (GUF)
+                        </option>
+
+                        
+                        <option value="PYF">FRENCH POLYNESIA (PYF)
+                        </option>
+
+                        
+                        <option value="ATF">FRENCH SOUTHERN TERRITORIES (ATF)
+                        </option>
+
+                        
+                        <option value="GAB">GABON (GAB)
+                        </option>
+
+                        
+                        <option value="GMB">GAMBIA, THE (GMB)
+                        </option>
+
+                        
+                        <option value="GEO">GEORGIA (GEO)
+                        </option>
+
+                        
+                        <option value="D">GERMANY (Deutschland) (D)
+                        </option>
+
+                        
+                        <option value="GHA">GHANA (GHA)
+                        </option>
+
+                        
+                        <option value="GIB">GIBRALTAR (GIB)
+                        </option>
+
+                        
+                        <option value="GRC">GREECE (GRC)
+                        </option>
+
+                        
+                        <option value="GRL">GREENLAND (GRL)
+                        </option>
+
+                        
+                        <option value="GRD">GRENADA (GRD)
+                        </option>
+
+                        
+                        <option value="GLP">GUADELOUPE (GLP)
+                        </option>
+
+                        
+                        <option value="GUM">GUAM (GUM)
+                        </option>
+
+                        
+                        <option value="GTM">GUATEMALA (GTM)
+                        </option>
+
+                        
+                        <option value="GGY">GUERNSEY (GGY)
+                        </option>
+
+                        
+                        <option value="GIN">GUINEA (GIN)
+                        </option>
+
+                        
+                        <option value="GNB">GUINEA-BISSAU (GNB)
+                        </option>
+
+                        
+                        <option value="GUY">GUYANA (GUY)
+                        </option>
+
+                        
+                        <option value="HTI">HAITI (HTI)
+                        </option>
+
+                        
+                        <option value="HMD">HEARD ISLAND AND MCDONALD ISLANDS (HMD)
+                        </option>
+
+                        
+                        <option value="HND">HONDURAS (HND)
+                        </option>
+
+                        
+                        <option value="HKG">HONG KONG (Special Administrative Region of China) (CHN)
+                        </option>
+
+                        
+                        <option value="HUN">HUNGARY (HUN)
+                        </option>
+
+                        
+                        <option value="ISL">ICELAND (ISL)
+                        </option>
+
+                        
+                        <option value="IND">INDIA
+                        </option>
+
+                        
+                        <option value="IDN">INDONESIA
+                        </option>
+
+                        
+                        <option value="IRN">IRAN (Islamic Republic of Iran) (IRN)
+                        </option>
+
+                        
+                        <option value="IRQ">IRAQ (IRQ)
+                        </option>
+
+                        
+                        <option value="IRL">IRELAND (IRL)
+                        </option>
+
+                        
+                        <option value="IMN">ISLE OF MAN (IMN)
+                        </option>
+
+                        
+                        <option value="ISR">ISRAEL (ISR)
+                        </option>
+
+                        
+                        <option value="ITA">ITALY (ITA)
+                        </option>
+
+                        
+                        <option value="JAM">JAMAICA (JAM)
+                        </option>
+
+                        
+                        <option value="JPN">JAPAN
+                        </option>
+
+                        
+                        <option value="JEY">JERSEY (JEY)
+                        </option>
+
+                        
+                        <option value="JOR">JORDAN (Hashemite Kingdom of Jordan) (JOR)
+                        </option>
+
+                        
+                        <option value="KAZ">KAZAKHSTAN (KAZ)
+                        </option>
+
+                        
+                        <option value="KEN">KENYA (KEN)
+                        </option>
+
+                        
+                        <option value="KIR">KIRIBATI (KIR)
+                        </option>
+
+                        
+                        <option value="PRK">KOREA [Democratic Peoples Republic of (North)Korea] (PRK)
+                        </option>
+
+                        
+                        <option value="KOR">KOREA [Republic of (South) Korea] (KOR)
+                        </option>
+
+                        
+                        <option value="RSK">KOSOVA
+                        </option>
+
+                        
+                        <option value="RKS">KOSOVA
+                        </option>
+
+                        
+                        <option value="KWT">KUWAIT (KWT)
+                        </option>
+
+                        
+                        <option value="KGZ">KYRGYZSTAN (KGZ)
+                        </option>
+
+                        
+                        <option value="LAO">LAO PEOPLES DEMOCRATIC REPUBLIC (LAO)
+                        </option>
+
+                        
+                        <option value="LVA">LATVIA (LVA)
+                        </option>
+
+                        
+                        <option value="LBN">LEBANON (LBN)
+                        </option>
+
+                        
+                        <option value="LSO">LESOTHO (LSO)
+                        </option>
+
+                        
+                        <option value="LBR">LIBERIA (LBR)
+                        </option>
+
+                        
+                        <option value="LBY">LIBYA (Libyan Arab Jamahirya) (LBY)
+                        </option>
+
+                        
+                        <option value="LIE">LIECHTENSTEIN (Fürstentum Liechtenstein) (LIE)
+                        </option>
+
+                        
+                        <option value="LTU">LITHUANIA (LTU)
+                        </option>
+
+                        
+                        <option value="LUX">LUXEMBOURG (LUX)
+                        </option>
+
+                        
+                        <option value="MAC">MACAO (Special Administrative Region of China) (MAC)
+                        </option>
+
+                        
+                        <option value="MKD">MACEDONIA (Former Yugoslav Republic of Macedonia) (MKD)
+                        </option>
+
+                        
+                        <option value="MDG">MADAGASCAR (MDG)
+                        </option>
+
+                        
+                        <option value="MWI">MALAWI (MWI)
+                        </option>
+
+                        
+                        <option value="MYS">MALAYSIA
+                        </option>
+
+                        
+                        <option value="MDV">MALDIVES
+                        </option>
+
+                        
+                        <option value="MLI">MALI (MLI)
+                        </option>
+
+                        
+                        <option value="MLT">MALTA (MLT)
+                        </option>
+
+                        
+                        <option value="MHL">MARSHALL ISLANDS (MHL)
+                        </option>
+
+                        
+                        <option value="MTQ">MARTINIQUE (MTQ)
+                        </option>
+
+                        
+                        <option value="MRT">MAURITANIA (MRT)
+                        </option>
+
+                        
+                        <option value="MUS">MAURITIUS (MUS)
+                        </option>
+
+                        
+                        <option value="MYT">MAYOTTE (MYT)
+                        </option>
+
+                        
+                        <option value="MEX">MEXICO (MEX)
+                        </option>
+
+                        
+                        <option value="FSM">MICRONESIA (Federated States of Micronesia) (FSM)
+                        </option>
+
+                        
+                        <option value="MDA">MOLDOVA (MDA)
+                        </option>
+
+                        
+                        <option value="MCO">MONACO (MCO)
+                        </option>
+
+                        
+                        <option value="MNG">MONGOLIA (MNG)
+                        </option>
+
+                        
+                        <option value="MNE">MONTENEGRO (MNE)
+                        </option>
+
+                        
+                        <option value="MSR">MONTSERRAT (MSR)
+                        </option>
+
+                        
+                        <option value="MAR">MOROCCO (MAR)
+                        </option>
+
+                        
+                        <option value="MOZ">MOZAMBIQUE (MOZ)
+                        </option>
+
+                        
+                        <option value="MMR">MYANMAR
+                        </option>
+
+                        
+                        <option value="NAM">NAMIBIA (NAM)
+                        </option>
+
+                        
+                        <option value="NRU">NAURU (NRU)
+                        </option>
+
+                        
+                        <option value="NPL">NEPAL (NPL)
+                        </option>
+
+                        
+                        <option value="NLD">NETHERLANDS (NLD)
+                        </option>
+
+                        
+                        <option value="ANT">NETHERLANDS ANTILLES (obsolete) (ANT)
+                        </option>
+
+                        
+                        <option value="NCL">NEW CALEDONIA (NCL)
+                        </option>
+
+                        
+                        <option value="NZL">NEW ZEALAND (NZL)
+                        </option>
+
+                        
+                        <option value="NIC">NICARAGUA (NIC)
+                        </option>
+
+                        
+                        <option value="NER">NIGER (NER)
+                        </option>
+
+                        
+                        <option value="NGA">NIGERIA (NGA)
+                        </option>
+
+                        
+                        <option value="NIU">NIUE (NIU)
+                        </option>
+
+                        
+                        <option value="NFK">NORFOLK ISLAND (NFK)
+                        </option>
+
+                        
+                        <option value="MNP">NORTHERN MARIANA ISLANDS (MNP)
+                        </option>
+
+                        
+                        <option value="NOR">NORWAY (NOR)
+                        </option>
+
+                        
+                        <option value="OMN">OMAN (OMN)
+                        </option>
+
+                        
+                        <option value="PAK">PAKISTAN (PAK)
+                        </option>
+
+                        
+                        <option value="PLW">PALAU (PLW)
+                        </option>
+
+                        
+                        <option value="PSE">PALESTINIAN TERRITORIES (PSE)
+                        </option>
+
+                        
+                        <option value="PAN">PANAMA (PAN)
+                        </option>
+
+                        
+                        <option value="PNG">PAPUA NEW GUINEA (PNG)
+                        </option>
+
+                        
+                        <option value="PRY">PARAGUAY (PRY)
+                        </option>
+
+                        
+                        <option value="PER">PERU (PER)
+                        </option>
+
+                        
+                        <option value="PHL">PHILIPPINES (PHL)
+                        </option>
+
+                        
+                        <option value="PCN">PITCAIRN (PCN)
+                        </option>
+
+                        
+                        <option value="POL">POLAND (POL)
+                        </option>
+
+                        
+                        <option value="PRT">PORTUGAL (PRT)
+                        </option>
+
+                        
+                        <option value="PRI">PUERTO RICO (PRI)
+                        </option>
+
+                        
+                        <option value="QAT">QATAR (QAT)
+                        </option>
+
+                        
+                        <option value="ZIM">REPUBLIC OF ZIMBABWE(ZIM)
+                        </option>
+
+                        
+                        <option value="ROM">ROMANIA (ROM)
+                        </option>
+
+                        
+                        <option value="ROU">ROMANIAN
+                        </option>
+
+                        
+                        <option value="RUS">RUSSIAN FEDARATION
+                        </option>
+
+                        
+                        <option value="RWA">RWANDA (RWA)
+                        </option>
+
+                        
+                        <option value="REU">RÉUNION (REU)
+                        </option>
+
+                        
+                        <option value="BLM">SAINT BARTHÉLEMY (BLM)
+                        </option>
+
+                        
+                        <option value="SHN">SAINT HELENA (SHN)
+                        </option>
+
+                        
+                        <option value="KNA">SAINT KITTS AND NEVIS (KNA)
+                        </option>
+
+                        
+                        <option value="LCA">SAINT LUCIA (LCA)
+                        </option>
+
+                        
+                        <option value="MAF">SAINT MARTIN (French portion) (MAF)
+                        </option>
+
+                        
+                        <option value="SPM">SAINT PIERRE AND MIQUELON (SPM)
+                        </option>
+
+                        
+                        <option value="VCT">SAINT VINCENT AND THE GRENADINES (VCT)
+                        </option>
+
+                        
+                        <option value="WSM">SAMOA (formerly Western Samoa) (WSM)
+                        </option>
+
+                        
+                        <option value="SMR">SAN MARINO (Republic of) (SMR)
+                        </option>
+
+                        
+                        <option value="STP">SAO TOME AND PRINCIPE (STP)
+                        </option>
+
+                        
+                        <option value="SAU">SAUDI ARABIA (Kingdom of Saudi Arabia) (SAU)
+                        </option>
+
+                        
+                        <option value="SEN">SENEGAL (SEN)
+                        </option>
+
+                        
+                        <option value="SRB">SERBIA (Republic of Serbia) (SRB)
+                        </option>
+
+                        
+                        <option value="SYC">SEYCHELLS
+                        </option>
+
+                        
+                        <option value="SLE">SIERRA LEONE (SLE)
+                        </option>
+
+                        
+                        <option value="SGP">SINGAPORE
+                        </option>
+
+                        
+                        <option value="SXM">SINT MAARTEN (SXM)
+                        </option>
+
+                        
+                        <option value="SVK">SLOVAKIA (Slovak Republic) (SVK)
+                        </option>
+
+                        
+                        <option value="SVN">SLOVENIA (SVN)
+                        </option>
+
+                        
+                        <option value="SLB">SOLOMON ISLANDS (SLB)
+                        </option>
+
+                        
+                        <option value="SOM">SOMALIA (SOM)
+                        </option>
+
+                        
+                        <option value="ZAF">SOUTH AFRICA (Zuid Afrika) (ZAF)
+                        </option>
+
+                        
+                        <option value="SGS">SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS (SGS)
+                        </option>
+
+                        
+                        <option value="SSD">SOUTH SUDAN (SSD)
+                        </option>
+
+                        
+                        <option value="ESP">SPAIN (España) (ESP)
+                        </option>
+
+                        
+                        <option value="LKA">SRI LANKA (formerly Ceylon)
+                        </option>
+
+                        
+                        <option value="SDN">SUDAN (SDN)
+                        </option>
+
+                        
+                        <option value="SUR">SURINAME (SUR)
+                        </option>
+
+                        
+                        <option value="SJM">SVALBARD AND JAN MAYEN (SJM)
+                        </option>
+
+                        
+                        <option value="SWZ">SWAZILAND (SWZ)
+                        </option>
+
+                        
+                        <option value="SWE">SWEDEN (SWE)
+                        </option>
+
+                        
+                        <option value="CHE">SWITZERLAND (Confederation of Helvetia) (CHE)
+                        </option>
+
+                        
+                        <option value="SYR">SYRIAN ARAB REPUBLIC (SYR)
+                        </option>
+
+                        
+                        <option value="TWN">TAIWAN (TWN)
+                        </option>
+
+                        
+                        <option value="TJK">TAJIKISTAN (TJK)
+                        </option>
+
+                        
+                        <option value="TZA">TANZANIA (TZA)
+                        </option>
+
+                        
+                        <option value="THA">THAILAND
+                        </option>
+
+                        
+                        <option value="TLS">TIMOR-LESTE (formerly East Timor) (TLS)
+                        </option>
+
+                        
+                        <option value="TGO">TOGO (TGO)
+                        </option>
+
+                        
+                        <option value="TKL">TOKELAU (TKL)
+                        </option>
+
+                        
+                        <option value="TON">TONGA (TON)
+                        </option>
+
+                        
+                        <option value="TTO">TRINIDAD AND TOBAGO (TTO)
+                        </option>
+
+                        
+                        <option value="TUN">TUNISIA (TUN)
+                        </option>
+
+                        
+                        <option value="TUR">TURKEY (TUR)
+                        </option>
+
+                        
+                        <option value="TKM">TURKMENISTAN (TKM)
+                        </option>
+
+                        
+                        <option value="TCA">TURKS AND CAICOS ISLANDS (TCA)
+                        </option>
+
+                        
+                        <option value="TUV">TUVALU (TUV)
+                        </option>
+
+                        
+                        <option value="UGA">UGANDA (UGA)
+                        </option>
+
+                        
+                        <option value="GBD">UK - BRITISH DEPENDANT TERRITORY CITIZEN (GBD)
+                        </option>
+
+                        
+                        <option value="IOT">UK - BRITISH INDIAN OCEAN TERRITORY (IOT)
+                        </option>
+
+                        
+                        <option value="GBN">UK - BRITISH NATIONAL(OVERSEAS) (GBN)
+                        </option>
+
+                        
+                        <option value="GBO">UK - BRITISH OVERSEAS CITIZEN (GBO)
+                        </option>
+
+                        
+                        <option value="GBP">UK - BRITISH PROTECTED PERSON (GBP)
+                        </option>
+
+                        
+                        <option value="GBS">UK - BRITISH SUBJECT (GBS)
+                        </option>
+
+                        
+                        <option value="GBR">UK - BRITISH-CITIZEN(GREAT BRITAIN) (GBR)
+                        </option>
+
+                        
+                        <option value="UKR">UKRAINE (UKR)
+                        </option>
+
+                        
+                        <option value="ARE">UNITED ARAB EMIRATES (ARE)
+                        </option>
+
+                        
+                        <option value="UNK">UNITED NATION KOSOVO
+                        </option>
+
+                        
+                        <option value="UNA">UNITED NATIONS (UNA)
+                        </option>
+
+                        
+                        <option value="UNO">UNITED NATIONS (UNO)
+                        </option>
+
+                        
+                        <option value="USA">UNITED STATES (USA)
+                        </option>
+
+                        
+                        <option value="UMI">UNITED STATES MINOR OUTLYING ISLANDS (UMI)
+                        </option>
+
+                        
+                        <option value="URY">URUGUAY (URY)
+                        </option>
+
+                        
+                        <option value="UZB">UZBEKISTAN (UZB)
+                        </option>
+
+                        
+                        <option value="VUT">VANUATU (VUT)
+                        </option>
+
+                        
+                        <option value="VAT">VATICAN CITY (Holy See) (VAT)
+                        </option>
+
+                        
+                        <option value="VEN">VENEZUELA (VEN)
+                        </option>
+
+                        
+                        <option value="VNM">VIET NAM (VNM)
+                        </option>
+
+                        
+                        <option value="VGB">VIRGIN ISLANDS, BRITISH (VGB)
+                        </option>
+
+                        
+                        <option value="VIR">VIRGIN ISLANDS, U.S. (VIR)
+                        </option>
+
+                        
+                        <option value="WLF">WALLIS AND FUTUNA (WLF)
+                        </option>
+
+                        
+                        <option value="ESH">WESTERN SAHARA (formerly Spanish Sahara) (ESH)
+                        </option>
+
+                        
+                        <option value="YEM">YEMEN (Yemen Arab Republic) (YEM)
+                        </option>
+
+                        
+                        <option value="ZAR">ZAIRE (ZAR)
+                        </option>
+
+                        
+                        <option value="ZMB">ZAMBIA (formerly Northern Rhodesia) (ZMB)
+                        </option>
+
+                        
+                        <option value="ZWE">ZIMBABWE (ZWE)
+                        </option>
+
+                        
+                        <option value="ALA">ÅLAND ISLANDS (ALA)
+                        </option>
+
+                        
+                    </select>
+                    <br> <span class="error"> 
+                </td>
+                <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span
+                        class="custom info"><img src="images/Help.png" alt="Information" height="48" width="48"/>
+            <em>Country or Region of Departure</em>Where you have been during last 14 days before this travel...</span></a>
+                </td>
+            </tr>
+            
+            <tr align="left" valign="middle" class="body_text_th">
+                <td height="30" class="inner_text_1">Visa Required Days <font color="#FF0000">*</font>
+                    <input type="hidden" id="hiddenRequestedVisaDays" value="1"/></td>
+                <td height="28">
+                    
+                    
+                    
+                    <select name="RequestedVisaDays" id="RequestedVisaDays" class="inner_text_box_man" style="width:150px" onchange="checkAvailableOptionGRP(this);">
+                        <option value="0X">[Select Please]</option>
+                        <option  value="30">30 </option>
+
+
+                    </select>
+                    <br> <span
+                        class="error"> </span></td>
+                <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span
+                        class="custom info"><img src="images/Help.png" alt="Information" height="48" width="48"/><em>For How
+        Many Days You Request for Visa?</em>Please enter number of Valid days choosing 1 to 180 days  </span></a>
+                </td>
+            </tr>
+            
+
+            <tr align="left"
+                valign="middle"
+                class="body_textwh_th">
+                <td width="141"
+                    height="28" class="inner_text_1"> Intended Arrival Date <font color="#FF0000">*</font></td>
+                <td height="28" width="361"><input name="arrivalDate" tabindex="0"
+                                                   id="idArrivalDate"
+                                                   type="text"
+                                                   class="inner_text_box_man"
+                                                   onclick="scwShow(this,event);"
+                                                   onFocus="scwShow(this,event);"
+                                                   size="10"
+                                                   maxlength="10"
+                                                   readonly="yes"
+                                                   value=""/><span
+                        class="error"> </span></td>
+                <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span
+                        class="custom info"><img src="images/Help.png" alt="Information" height="48" width="48"/><em>Intended
+                    Arrival Date</em>Please select the
+                                                  date you intend to enter Sri 
+                                                  Lanka. An ETA is valid for up 
+                                                  to 03 month from date of issue.</span></a></td>
+            </tr>
+            <tr align="left"
+                valign="middle"
+                class="body_textwh_th">
+                <td width="141"
+                    height="28" class="inner_text_1"> Purpose of Visit <font color="#FF0000">*</font></td>
+                <td width="361" height="28">
+
+                    <select name="puofvisit" class="inner_text_box_man" tabindex="0" id="idPuofvisit"
+                            value="" style="width:252px;">
+                        <option value="0X">[Select Please]</option>
+                        
+                        <option id="V10" value="V10">M.I.C.E Tourism (Meetings, Incentives, Conferences & Exhibitions/Events)
+                        </option>
+                        
+                        <option id="V03" value="V03">Medical treatment including Ayurvedic (herbal)
+                        </option>
+                        
+                        <option id="V14" value="V14">Participate in Art, Music, and Dance Events
+                        </option>
+                        
+                        <option id="V12" value="V12">Participate in Pilgrimages
+                        </option>
+                        
+                        <option id="V13" value="V13">Participate in Sport Events
+                        </option>
+                        
+                        <option id="V11" value="V11">Participate in Weddings
+                        </option>
+                        
+                        <option id="V01" value="V01">Sightseeing or Holidaying
+                        </option>
+                        
+                        <option id="V02" value="V02">Visiting friends and relatives
+                        </option>
+                        
+                    </select><br><span class="error"> </span></td>
+                <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span
+                        class="custom info"><img src="images/Help.png" alt="Information" height="48" width="48"/><em>Purpose
+                    of Visit</em>Select you purpose
+                                                  of traveling to Sri Lanka. </span></a></td>
+            </tr>
+
+            <!-- New field :purpose description added_on : 2016/jan/12 -->
+            
+            <!-- End of new field :purpose description added_on : 2016/jan/12 -->
+            <tr align="left"
+                valign="middle"
+                class="body_textwh_th">
+                <td width="141"
+                    height="28" class="inner_text_1">Port
+                    of Departure
+                </td>
+                <td width="361" height="28"><input name="depcity" tabindex="0"
+                                                   class="inner_text_box_nonman"
+                                                   id="idDepcity"
+                                                   onchange="validatealphanumWithSpace_onChange(this,'Port of Departure')"
+                                                   onKeyDown="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event);"
+                                                   onKeyUp="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event);"
+                                                   value="" size="45"
+                                                   maxlength="50"/><br><span
+                        class="error"> </span></td>
+                <td width="60" height="28" valign="top">&nbsp;</td>
+            </tr>
+            <tr align="left"
+                valign="middle"
+                class="body_textwh_th">
+                <td width="141"
+                    height="28" class="inner_text_1">Airline/Vessel
+                </td>
+                <td width="361" height="28"><input name="airline"
+                                                   class="inner_text_box_nonman"
+                                                   id="idAirline" tabindex="0"
+                                                   onchange="validatealphanumWithSpace_onChange(this,'Airline/Vessel')"
+                                                   onKeyDown="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event);"
+                                                   onKeyUp="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event);"
+                                                   value="" size="45"
+                                                   maxlength="60"/><br><span
+                        class="error"> </span></td>
+                <td width="60" height="28" valign="top">&nbsp;</td>
+            </tr>
+            <tr align="left"
+                valign="middle"
+                class="body_textwh_th">
+                <td width="141"
+                    height="28" class="inner_text_1">Flight/Vessel
+                    Number
+                </td>
+                <td width="361" height="28"><input name="flightno"
+                                                   class="inner_text_box_nonman"
+                                                   id="idFlightno" tabindex="0"
+                                                   onchange="validatealphanum_onChange(this,'Flight/Vessel Number')"
+                                                   onKeyDown="validatealphanum(this); convertToUpperCase(this,'0',event);"
+                                                   onKeyUp="validatealphanum(this); convertToUpperCase(this,'0',event);"
+                                                   value="" size="45"
+                                                   maxlength="60"/><br><span
+                        class="error"> </span></td>
+                <td width="60" height="28" valign="top">&nbsp;</td>
+            </tr>
+            
+        </table>
+    </td>
+</tr>
+
+<input type="hidden"
+       id="hiddenContactInfo"
+       value="1"/>
+<tr>
+<td align="center" valign="top">
+<table width="562" border="0" cellpadding="0" cellspacing="5">
+<tr align="left" valign="middle" class="body_textwh_th">
+    <td height="25" colspan="3" class="menu_text_th">
+        <table width="555" height="31" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+                <td width="6" height="20" align="left" valign="middle"><img src="images/left_corner_2.png" width="6"
+                                                                            height="31"></td>
+                <td width="560" align="left" valign="middle" class="TBline_2">
+                    <table width="86%" border="0" align="left" cellpadding="0" cellspacing="0">
+                        <tr>
+                            <td width="3%" align="left">&nbsp;</td>
+                            <td width="97%" align="left" class="textHeadingBlack"><span>Contact
+                                                              Details</span></td>
+                        </tr>
+                    </table>
+                </td>
+                <td width="10" align="left" valign="middle"><img src="images/right_corner_2.png" width="7" height="31"/>
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> Address Line 1<font color="#FF0000">*</font></td>
+    <td width="361" height="30"><input name="conAddOne"
+                                       class="inner_text_box_man"
+                                       id="idContAddOne"
+                                       onchange="validateCharacterAdrress_Onchange(this,'Address Line 1');"
+                                       onKeyDown="validateCharacterAdrress(this); convertToUpperCase(this,'0',event);"
+                                       onKeyUp=" validateCharacterAdrress(this); convertToUpperCase(this,'0',event);"
+                                       oninput="limitInput(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Address
+        (Number) </em>Please type your
+                                                  current apartment or house / 
+                                                  building number in your address.<br>
+                                                  <br>
+                                                  Example: 33000,C/12 ABC </span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> Address Line 2
+    </td>
+    <td width="361" height="30"><input name="contAddTwo"
+                                       class="inner_text_box_nonman"
+                                       id="idContAddTwo"
+                                       onchange="validateCharacterAdrress_Onchange(this,'Address Line 2');"
+                                       onKeyUp="validateCharacterAdrress(this); convertToUpperCase(this,'0',event); "
+                                       onKeyDown=" validateCharacterAdrress(this); convertToUpperCase(this,'0',event);"
+                                       oninput="limitInput(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Address
+        (Street) </em>Please type your
+                                                  current Street Address in the 
+                                                  text box.<br>
+                                                  <br>
+                                                  Example: Ritz burgs Street</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> City <font color="#FF0000">*</font></td>
+    <td width="361" height="30"><input name="contCity"
+                                       class="inner_text_box_man"
+                                       id="idContCity"
+                                       onchange="validatealphanumWithSpace_onChange(this,'City');"
+                                       onKeyDown="validatealphanumWithSpace(this);"
+                                       onKeyUp="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event); convertToUpperCase(this,'0',event);"
+                                       oninput="limitInput(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>City </em>Please type the name of
+                                                  the city in which you live into 
+                                                  the text box.<br>
+                                                  <br>
+                                                  Example: Colombo</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> State <font color="#FF0000">*</font></td>
+    <td width="361" height="30"><input name="contState"
+                                       class="inner_text_box_man"
+                                       id="idContState"
+                                       onchange="validatealphanumWithSpace_onChange(this,'State');"
+                                       onKeyDown="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event);"
+                                       onKeyUp="validatealphanumWithSpace(this); convertToUpperCase(this,'0',event); "
+                                       oninput="limitInput(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>State </em>Please type the name of
+                                                  the state in which you live 
+                                                  into the text box.<br>
+                                                  <br>
+                                                  Example:Victoria, New York</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1">Zip/Postal
+        Code
+    </td>
+    <td height="30"
+        colspan="2"><input name="contZipCode"
+                           type="text"
+                           class="inner_text_box_nonman"
+                           id="idContZipCode"
+                           onchange="validatealphanum_onChange(this,'Zip');"
+                           onKeyUp="validatealphanum(this); convertToUpperCase(this,'0',event);"
+                           onKeyDown="validatealphanum(this); convertToUpperCase(this,'0',event);"
+                           value="" size="45"
+                           maxlength="60"/><br><span class="error"> </span></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> Country or Region<font color="#FF0000">*</font></td>
+    <td width="361" height="30"><select name="conCountry" style="width:250px"
+                                        class="inner_text_box_man"
+                                        id="idConCountry"
+                                        value="">
+        <option value="0X">[Select
+            Country or Region]
+        </option>
+        
+        <option value="AFG">AFGHANISTAN (AFG)
+        </option>
+        
+        <option value="ALB">ALBANIA (ALB)
+        </option>
+        
+        <option value="DZA">ALGERIA (El Djazaïr) (DZA)
+        </option>
+        
+        <option value="ASM">AMERICAN SAMOA (ASM)
+        </option>
+        
+        <option value="AND">ANDORRA (AND)
+        </option>
+        
+        <option value="AGO">ANGOLA (AGO)
+        </option>
+        
+        <option value="AIA">ANGUILLA (AIA)
+        </option>
+        
+        <option value="ATA">ANTARCTICA (ATA)
+        </option>
+        
+        <option value="ATG">ANTIGUA AND BARBUDA (ATG)
+        </option>
+        
+        <option value="ARG">ARGENTINA (ARG)
+        </option>
+        
+        <option value="ARM">ARMENIA (ARM)
+        </option>
+        
+        <option value="ABW">ARUBA (ABW)
+        </option>
+        
+        <option value="AUS">AUSTRALIA (AUS)
+        </option>
+        
+        <option value="AUT">AUSTRIA (AUT)
+        </option>
+        
+        <option value="AZE">AZERBAIJAN (AZE)
+        </option>
+        
+        <option value="BHS">BAHAMAS (BHS)
+        </option>
+        
+        <option value="BHR">BAHRAIN (BHR)
+        </option>
+        
+        <option value="BGD">BANGLADESH (BGD)
+        </option>
+        
+        <option value="BRB">BARBADOS (BRB)
+        </option>
+        
+        <option value="BLR">BELARUS (BLR)
+        </option>
+        
+        <option value="BEL">BELGIUM (BEL)
+        </option>
+        
+        <option value="BLZ">BELIZE (BLZ)
+        </option>
+        
+        <option value="BEN">BENIN (BEN)
+        </option>
+        
+        <option value="BMU">BERMUDA (BMU)
+        </option>
+        
+        <option value="BTN">BHUTAN (BTN)
+        </option>
+        
+        <option value="BOL">BOLIVIA (BOL)
+        </option>
+        
+        <option value="BES">BONAIRE, ST. EUSTATIUS, AND SABA (BES)
+        </option>
+        
+        <option value="BIH">BOSNIA AND HERZEGOVINA (BIH)
+        </option>
+        
+        <option value="BWA">BOTSWANA (BWA)
+        </option>
+        
+        <option value="BVT">BOUVET ISLAND (BVT)
+        </option>
+        
+        <option value="BRA">BRAZIL (BRA)
+        </option>
+        
+        <option value="BRN">BRUNEI DARUSSALAM (BRN)
+        </option>
+        
+        <option value="BGR">BULGARIA (BGR)
+        </option>
+        
+        <option value="BFA">BURKINA FASO (BFA)
+        </option>
+        
+        <option value="BDI">BURUNDI (BDI)
+        </option>
+        
+        <option value="KHM">CAMBODIA (KHM)
+        </option>
+        
+        <option value="CMR">CAMEROON (CMR)
+        </option>
+        
+        <option value="CAN">CANADA (CAN)
+        </option>
+        
+        <option value="CPV">CAPE VERDE (CPV)
+        </option>
+        
+        <option value="CYM">CAYMAN ISLANDS (CYM)
+        </option>
+        
+        <option value="CAF">CENTRAL AFRICAN REPUBLIC (CAF)
+        </option>
+        
+        <option value="TCD">CHAD (Tchad) (TCD)
+        </option>
+        
+        <option value="CHL">CHILE (CHL)
+        </option>
+        
+        <option value="CHN">CHINA
+        </option>
+        
+        <option value="CXR">CHRISTMAS ISLAND (CXR)
+        </option>
+        
+        <option value="CCK">COCOS (KEELING) ISLANDS (CCK)
+        </option>
+        
+        <option value="COL">COLOMBIA (COL)
+        </option>
+        
+        <option value="COM">COMOROS (COM)
+        </option>
+        
+        <option value="COG">CONGO, REPUBLIC OF (COG)
+        </option>
+        
+        <option value="COD">CONGO, THE DEMOCRATIC REPUBLIC OF THE (COD)
+        </option>
+        
+        <option value="COK">COOK ISLANDS (COK)
+        </option>
+        
+        <option value="CRI">COSTA RICA (CRI)
+        </option>
+        
+        <option value="HRV">CROATIA (Hrvatska) (HRV)
+        </option>
+        
+        <option value="CUB">CUBA (CUB)
+        </option>
+        
+        <option value="CUW">CURACAO (CUW)
+        </option>
+        
+        <option value="CYP">CYPRUS (CYP)
+        </option>
+        
+        <option value="CZE">CZECH REPUBLIC
+        </option>
+        
+        <option value="CIV">CÔTE DIVOIRE (Ivory Coast) (CIV)
+        </option>
+        
+        <option value="DNK">DENMARK (DNK)
+        </option>
+        
+        <option value="DJI">DJIBOUTI (DJI)
+        </option>
+        
+        <option value="DMA">DOMINICA (DMA)
+        </option>
+        
+        <option value="DOM">DOMINICAN REPUBLIC (DOM)
+        </option>
+        
+        <option value="ECU">ECUADOR (ECU)
+        </option>
+        
+        <option value="EGY">EGYPT (EGY)
+        </option>
+        
+        <option value="SLV">EL SALVADOR (SLV)
+        </option>
+        
+        <option value="GNQ">EQUATORIAL GUINEA (GNQ)
+        </option>
+        
+        <option value="ERI">ERITREA (ERI)
+        </option>
+        
+        <option value="EST">ESTONIA (EST)
+        </option>
+        
+        <option value="ETH">ETHIOPIA (ETH)
+        </option>
+        
+        <option value="EU">EUROPEAN UNION (EU)
+        </option>
+        
+        <option value="FRO">FAEROE ISLANDS (FRO)
+        </option>
+        
+        <option value="FLK">FALKLAND ISLANDS (MALVINAS) (FLK)
+        </option>
+        
+        <option value="FJI">FIJI (FJI)
+        </option>
+        
+        <option value="FIN">FINLAND (FIN)
+        </option>
+        
+        <option value="FRA">FRANCE (FRA)
+        </option>
+        
+        <option value="FXX">FRANCE, Metropolitan (FXX)
+        </option>
+        
+        <option value="GUF">FRENCH GUIANA (GUF)
+        </option>
+        
+        <option value="PYF">FRENCH POLYNESIA (PYF)
+        </option>
+        
+        <option value="ATF">FRENCH SOUTHERN TERRITORIES (ATF)
+        </option>
+        
+        <option value="GAB">GABON (GAB)
+        </option>
+        
+        <option value="GMB">GAMBIA, THE (GMB)
+        </option>
+        
+        <option value="GEO">GEORGIA (GEO)
+        </option>
+        
+        <option value="D">GERMANY (Deutschland) (D)
+        </option>
+        
+        <option value="GHA">GHANA (GHA)
+        </option>
+        
+        <option value="GIB">GIBRALTAR (GIB)
+        </option>
+        
+        <option value="GRC">GREECE (GRC)
+        </option>
+        
+        <option value="GRL">GREENLAND (GRL)
+        </option>
+        
+        <option value="GRD">GRENADA (GRD)
+        </option>
+        
+        <option value="GLP">GUADELOUPE (GLP)
+        </option>
+        
+        <option value="GUM">GUAM (GUM)
+        </option>
+        
+        <option value="GTM">GUATEMALA (GTM)
+        </option>
+        
+        <option value="GGY">GUERNSEY (GGY)
+        </option>
+        
+        <option value="GIN">GUINEA (GIN)
+        </option>
+        
+        <option value="GNB">GUINEA-BISSAU (GNB)
+        </option>
+        
+        <option value="GUY">GUYANA (GUY)
+        </option>
+        
+        <option value="HTI">HAITI (HTI)
+        </option>
+        
+        <option value="HMD">HEARD ISLAND AND MCDONALD ISLANDS (HMD)
+        </option>
+        
+        <option value="HND">HONDURAS (HND)
+        </option>
+        
+        <option value="HKG">HONG KONG (Special Administrative Region of China) (CHN)
+        </option>
+        
+        <option value="HUN">HUNGARY (HUN)
+        </option>
+        
+        <option value="ISL">ICELAND (ISL)
+        </option>
+        
+        <option value="IND">INDIA
+        </option>
+        
+        <option value="IDN">INDONESIA
+        </option>
+        
+        <option value="IRN">IRAN (Islamic Republic of Iran) (IRN)
+        </option>
+        
+        <option value="IRQ">IRAQ (IRQ)
+        </option>
+        
+        <option value="IRL">IRELAND (IRL)
+        </option>
+        
+        <option value="IMN">ISLE OF MAN (IMN)
+        </option>
+        
+        <option value="ISR">ISRAEL (ISR)
+        </option>
+        
+        <option value="ITA">ITALY (ITA)
+        </option>
+        
+        <option value="JAM">JAMAICA (JAM)
+        </option>
+        
+        <option value="JPN">JAPAN
+        </option>
+        
+        <option value="JEY">JERSEY (JEY)
+        </option>
+        
+        <option value="JOR">JORDAN (Hashemite Kingdom of Jordan) (JOR)
+        </option>
+        
+        <option value="KAZ">KAZAKHSTAN (KAZ)
+        </option>
+        
+        <option value="KEN">KENYA (KEN)
+        </option>
+        
+        <option value="KIR">KIRIBATI (KIR)
+        </option>
+        
+        <option value="PRK">KOREA [Democratic Peoples Republic of (North)Korea] (PRK)
+        </option>
+        
+        <option value="KOR">KOREA [Republic of (South) Korea] (KOR)
+        </option>
+        
+        <option value="RSK">KOSOVA
+        </option>
+        
+        <option value="RKS">KOSOVA
+        </option>
+        
+        <option value="KWT">KUWAIT (KWT)
+        </option>
+        
+        <option value="KGZ">KYRGYZSTAN (KGZ)
+        </option>
+        
+        <option value="LAO">LAO PEOPLES DEMOCRATIC REPUBLIC (LAO)
+        </option>
+        
+        <option value="LVA">LATVIA (LVA)
+        </option>
+        
+        <option value="LBN">LEBANON (LBN)
+        </option>
+        
+        <option value="LSO">LESOTHO (LSO)
+        </option>
+        
+        <option value="LBR">LIBERIA (LBR)
+        </option>
+        
+        <option value="LBY">LIBYA (Libyan Arab Jamahirya) (LBY)
+        </option>
+        
+        <option value="LIE">LIECHTENSTEIN (Fürstentum Liechtenstein) (LIE)
+        </option>
+        
+        <option value="LTU">LITHUANIA (LTU)
+        </option>
+        
+        <option value="LUX">LUXEMBOURG (LUX)
+        </option>
+        
+        <option value="MAC">MACAO (Special Administrative Region of China) (MAC)
+        </option>
+        
+        <option value="MKD">MACEDONIA (Former Yugoslav Republic of Macedonia) (MKD)
+        </option>
+        
+        <option value="MDG">MADAGASCAR (MDG)
+        </option>
+        
+        <option value="MWI">MALAWI (MWI)
+        </option>
+        
+        <option value="MYS">MALAYSIA
+        </option>
+        
+        <option value="MDV">MALDIVES
+        </option>
+        
+        <option value="MLI">MALI (MLI)
+        </option>
+        
+        <option value="MLT">MALTA (MLT)
+        </option>
+        
+        <option value="MHL">MARSHALL ISLANDS (MHL)
+        </option>
+        
+        <option value="MTQ">MARTINIQUE (MTQ)
+        </option>
+        
+        <option value="MRT">MAURITANIA (MRT)
+        </option>
+        
+        <option value="MUS">MAURITIUS (MUS)
+        </option>
+        
+        <option value="MYT">MAYOTTE (MYT)
+        </option>
+        
+        <option value="MEX">MEXICO (MEX)
+        </option>
+        
+        <option value="FSM">MICRONESIA (Federated States of Micronesia) (FSM)
+        </option>
+        
+        <option value="MDA">MOLDOVA (MDA)
+        </option>
+        
+        <option value="MCO">MONACO (MCO)
+        </option>
+        
+        <option value="MNG">MONGOLIA (MNG)
+        </option>
+        
+        <option value="MNE">MONTENEGRO (MNE)
+        </option>
+        
+        <option value="MSR">MONTSERRAT (MSR)
+        </option>
+        
+        <option value="MAR">MOROCCO (MAR)
+        </option>
+        
+        <option value="MOZ">MOZAMBIQUE (MOZ)
+        </option>
+        
+        <option value="MMR">MYANMAR
+        </option>
+        
+        <option value="NAM">NAMIBIA (NAM)
+        </option>
+        
+        <option value="NRU">NAURU (NRU)
+        </option>
+        
+        <option value="NPL">NEPAL (NPL)
+        </option>
+        
+        <option value="NLD">NETHERLANDS (NLD)
+        </option>
+        
+        <option value="ANT">NETHERLANDS ANTILLES (obsolete) (ANT)
+        </option>
+        
+        <option value="NCL">NEW CALEDONIA (NCL)
+        </option>
+        
+        <option value="NZL">NEW ZEALAND (NZL)
+        </option>
+        
+        <option value="NIC">NICARAGUA (NIC)
+        </option>
+        
+        <option value="NER">NIGER (NER)
+        </option>
+        
+        <option value="NGA">NIGERIA (NGA)
+        </option>
+        
+        <option value="NIU">NIUE (NIU)
+        </option>
+        
+        <option value="NFK">NORFOLK ISLAND (NFK)
+        </option>
+        
+        <option value="MNP">NORTHERN MARIANA ISLANDS (MNP)
+        </option>
+        
+        <option value="NOR">NORWAY (NOR)
+        </option>
+        
+        <option value="OMN">OMAN (OMN)
+        </option>
+        
+        <option value="PAK">PAKISTAN (PAK)
+        </option>
+        
+        <option value="PLW">PALAU (PLW)
+        </option>
+        
+        <option value="PSE">PALESTINIAN TERRITORIES (PSE)
+        </option>
+        
+        <option value="PAN">PANAMA (PAN)
+        </option>
+        
+        <option value="PNG">PAPUA NEW GUINEA (PNG)
+        </option>
+        
+        <option value="PRY">PARAGUAY (PRY)
+        </option>
+        
+        <option value="PER">PERU (PER)
+        </option>
+        
+        <option value="PHL">PHILIPPINES (PHL)
+        </option>
+        
+        <option value="PCN">PITCAIRN (PCN)
+        </option>
+        
+        <option value="POL">POLAND (POL)
+        </option>
+        
+        <option value="PRT">PORTUGAL (PRT)
+        </option>
+        
+        <option value="PRI">PUERTO RICO (PRI)
+        </option>
+        
+        <option value="QAT">QATAR (QAT)
+        </option>
+        
+        <option value="ZIM">REPUBLIC OF ZIMBABWE(ZIM)
+        </option>
+        
+        <option value="ROM">ROMANIA (ROM)
+        </option>
+        
+        <option value="ROU">ROMANIAN
+        </option>
+        
+        <option value="RUS">RUSSIAN FEDARATION
+        </option>
+        
+        <option value="RWA">RWANDA (RWA)
+        </option>
+        
+        <option value="REU">RÉUNION (REU)
+        </option>
+        
+        <option value="BLM">SAINT BARTHÉLEMY (BLM)
+        </option>
+        
+        <option value="SHN">SAINT HELENA (SHN)
+        </option>
+        
+        <option value="KNA">SAINT KITTS AND NEVIS (KNA)
+        </option>
+        
+        <option value="LCA">SAINT LUCIA (LCA)
+        </option>
+        
+        <option value="MAF">SAINT MARTIN (French portion) (MAF)
+        </option>
+        
+        <option value="SPM">SAINT PIERRE AND MIQUELON (SPM)
+        </option>
+        
+        <option value="VCT">SAINT VINCENT AND THE GRENADINES (VCT)
+        </option>
+        
+        <option value="WSM">SAMOA (formerly Western Samoa) (WSM)
+        </option>
+        
+        <option value="SMR">SAN MARINO (Republic of) (SMR)
+        </option>
+        
+        <option value="STP">SAO TOME AND PRINCIPE (STP)
+        </option>
+        
+        <option value="SAU">SAUDI ARABIA (Kingdom of Saudi Arabia) (SAU)
+        </option>
+        
+        <option value="SEN">SENEGAL (SEN)
+        </option>
+        
+        <option value="SRB">SERBIA (Republic of Serbia) (SRB)
+        </option>
+        
+        <option value="SYC">SEYCHELLS
+        </option>
+        
+        <option value="SLE">SIERRA LEONE (SLE)
+        </option>
+        
+        <option value="SGP">SINGAPORE
+        </option>
+        
+        <option value="SXM">SINT MAARTEN (SXM)
+        </option>
+        
+        <option value="SVK">SLOVAKIA (Slovak Republic) (SVK)
+        </option>
+        
+        <option value="SVN">SLOVENIA (SVN)
+        </option>
+        
+        <option value="SLB">SOLOMON ISLANDS (SLB)
+        </option>
+        
+        <option value="SOM">SOMALIA (SOM)
+        </option>
+        
+        <option value="ZAF">SOUTH AFRICA (Zuid Afrika) (ZAF)
+        </option>
+        
+        <option value="SGS">SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS (SGS)
+        </option>
+        
+        <option value="SSD">SOUTH SUDAN (SSD)
+        </option>
+        
+        <option value="ESP">SPAIN (España) (ESP)
+        </option>
+        
+        <option value="LKA">SRI LANKA (formerly Ceylon)
+        </option>
+        
+        <option value="SDN">SUDAN (SDN)
+        </option>
+        
+        <option value="SUR">SURINAME (SUR)
+        </option>
+        
+        <option value="SJM">SVALBARD AND JAN MAYEN (SJM)
+        </option>
+        
+        <option value="SWZ">SWAZILAND (SWZ)
+        </option>
+        
+        <option value="SWE">SWEDEN (SWE)
+        </option>
+        
+        <option value="CHE">SWITZERLAND (Confederation of Helvetia) (CHE)
+        </option>
+        
+        <option value="SYR">SYRIAN ARAB REPUBLIC (SYR)
+        </option>
+        
+        <option value="TWN">TAIWAN (TWN)
+        </option>
+        
+        <option value="TJK">TAJIKISTAN (TJK)
+        </option>
+        
+        <option value="TZA">TANZANIA (TZA)
+        </option>
+        
+        <option value="THA">THAILAND
+        </option>
+        
+        <option value="TLS">TIMOR-LESTE (formerly East Timor) (TLS)
+        </option>
+        
+        <option value="TGO">TOGO (TGO)
+        </option>
+        
+        <option value="TKL">TOKELAU (TKL)
+        </option>
+        
+        <option value="TON">TONGA (TON)
+        </option>
+        
+        <option value="TTO">TRINIDAD AND TOBAGO (TTO)
+        </option>
+        
+        <option value="TUN">TUNISIA (TUN)
+        </option>
+        
+        <option value="TUR">TURKEY (TUR)
+        </option>
+        
+        <option value="TKM">TURKMENISTAN (TKM)
+        </option>
+        
+        <option value="TCA">TURKS AND CAICOS ISLANDS (TCA)
+        </option>
+        
+        <option value="TUV">TUVALU (TUV)
+        </option>
+        
+        <option value="UGA">UGANDA (UGA)
+        </option>
+        
+        <option value="GBD">UK - BRITISH DEPENDANT TERRITORY CITIZEN (GBD)
+        </option>
+        
+        <option value="IOT">UK - BRITISH INDIAN OCEAN TERRITORY (IOT)
+        </option>
+        
+        <option value="GBN">UK - BRITISH NATIONAL(OVERSEAS) (GBN)
+        </option>
+        
+        <option value="GBO">UK - BRITISH OVERSEAS CITIZEN (GBO)
+        </option>
+        
+        <option value="GBP">UK - BRITISH PROTECTED PERSON (GBP)
+        </option>
+        
+        <option value="GBS">UK - BRITISH SUBJECT (GBS)
+        </option>
+        
+        <option value="GBR">UK - BRITISH-CITIZEN(GREAT BRITAIN) (GBR)
+        </option>
+        
+        <option value="UKR">UKRAINE (UKR)
+        </option>
+        
+        <option value="ARE">UNITED ARAB EMIRATES (ARE)
+        </option>
+        
+        <option value="UNK">UNITED NATION KOSOVO
+        </option>
+        
+        <option value="UNA">UNITED NATIONS (UNA)
+        </option>
+        
+        <option value="UNO">UNITED NATIONS (UNO)
+        </option>
+        
+        <option value="USA">UNITED STATES (USA)
+        </option>
+        
+        <option value="UMI">UNITED STATES MINOR OUTLYING ISLANDS (UMI)
+        </option>
+        
+        <option value="URY">URUGUAY (URY)
+        </option>
+        
+        <option value="UZB">UZBEKISTAN (UZB)
+        </option>
+        
+        <option value="VUT">VANUATU (VUT)
+        </option>
+        
+        <option value="VAT">VATICAN CITY (Holy See) (VAT)
+        </option>
+        
+        <option value="VEN">VENEZUELA (VEN)
+        </option>
+        
+        <option value="VNM">VIET NAM (VNM)
+        </option>
+        
+        <option value="VGB">VIRGIN ISLANDS, BRITISH (VGB)
+        </option>
+        
+        <option value="VIR">VIRGIN ISLANDS, U.S. (VIR)
+        </option>
+        
+        <option value="WLF">WALLIS AND FUTUNA (WLF)
+        </option>
+        
+        <option value="ESH">WESTERN SAHARA (formerly Spanish Sahara) (ESH)
+        </option>
+        
+        <option value="YEM">YEMEN (Yemen Arab Republic) (YEM)
+        </option>
+        
+        <option value="ZAR">ZAIRE (ZAR)
+        </option>
+        
+        <option value="ZMB">ZAMBIA (formerly Northern Rhodesia) (ZMB)
+        </option>
+        
+        <option value="ZWE">ZIMBABWE (ZWE)
+        </option>
+        
+        <option value="ALA">ÅLAND ISLANDS (ALA)
+        </option>
+        
+    </select><br><span class="error"> </span></td>
+    <td width="60" height="30" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Country or Region</em>Please
+                                                  select the name of the country or Region
+                                                  in which you live in.<br>
+                                                  <br>
+                                                  Example: Australia, or United 
+                                                  Kingdom, or United States, or 
+                                                  Canada</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> TelePhone Number <font color="#FF0000">*</font></td>
+    <td width="361" height="28"><input name="contPhoneNo"
+                                       type="text"
+                                       class="inner_text_box_man"
+                                       id="idContPhoneNo"
+                                       onChange="validateContactNumber_onChange(this,'Phone Number');"
+                                       onKeyUp="validateContactNumber(this);" onKeyDown="validateContactNumber(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Telephone
+        Number </em>Please type your
+                                                  current telephone number into 
+                                                  the text box. Your phone number 
+                                                  should include your country 
+                                                  code, your area code, and your 
+                                                  local number. This number should 
+                                                  be the phone number at which 
+                                                  you are most likely to be reached.<br>
+                                                  <br>
+                                                  Example: 0094 115329300</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> Mobile Number
+    </td>
+    <td width="361" height="28"><input name="contMobileno"
+                                       type="text"
+                                       class="inner_text_box_nonman"
+                                       id="idContMobileno"
+                                       onchange="validateContactNumber_onChange(this,'Mobile Number')"
+                                       onKeyUp="validateContactNumber(this);" onKeyDown="validateContactNumber(this);"
+                                       value="" size="45"
+                                       maxlength="60"/><br><span class="error"> </span></td>
+    <td width="60" height="28" valign="top">&nbsp;</td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1"> Fax Number
+    </td>
+    <td width="361" height="28"><input name="contFaxno"
+                                       type="text"
+                                       class="inner_text_box_nonman"
+                                       id="idContFaxno"
+                                       size="45"
+                                       maxlength="60"
+                                       value=""
+                                       onKeyUp="validateContactNumber(this);" onKeyDown="validateContactNumber(this);"
+                                       onchange="validateContactNumber_onChange(this,'Fax Number')"/><br><span
+            class="error"> </span></td>
+    <td width="60" height="28" valign="top">&nbsp;</td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1">Email
+        Address<font color="#FF0000">*</font></td>
+    <td width="361" height="28"><input name="contEmail"
+                                       class="inner_text_box_man"
+                                       id="idContEmail"
+                                       onChange="validateEmail(this);"
+                                       value="" size="45"
+                                       maxlength="60" onKeyUp="checkEmailCharacters(this);"
+                                       onKeyDown="checkEmailCharacters(this);"/><br>
+        <span class="error"> </span></td>
+    <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Email Address </em>Enter
+                                                                                                                                                                                                                                                          your
+                                                                                                                                                                                                                                                          personal
+                                                                                                                                                                                                                                                          email
+                                                                                                                                                                                                                                                          address. ETA Approval/Acknowledgment will be sent to this email address. 
+</span></a></td>
+</tr>
+
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1">Re-Enter Email
+        Address<font color="#FF0000">*</font></td>
+    <td width="361" height="28"><input name="reEnterEmail"
+                                       class="inner_text_box_man"
+                                       id="idReEnterEmail"
+                                       onChange="validateReEnteredEmail(this, 'idContEmail');"
+                                       value="" size="45"
+                                       maxlength="60" onKeyUp="checkEmailCharacters(this);"
+                                       onKeyDown="checkEmailCharacters(this);"/><br>
+        <span class="error"> </span></td>
+    <td width="60" height="28" valign="top"><a class="tooltip" tabindex="50" href="#">?<span class="custom info"><img
+            src="images/Help.png" alt="Information" height="48" width="48"/><em>Re-Enter Email Address </em>Enter
+                                                                                                                                                                                                                                                          your
+                                                                                                                                                                                                                                                          personal
+                                                                                                                                                                                                                                                          email
+                                                                                                                                                                                                                                                          address again. To confirm the previously entered email address.
+</span></a></td>
+</tr>
+<tr align="left"
+    valign="middle"
+    class="body_textwh_th">
+    <td width="141"
+        height="28" class="inner_text_1">Address in Sri Lanka
+    </td>
+    <td width="361" height="28"><textarea name="contactAddSL" cols="40" rows="5"
+                                          class="inner_text_box_nonman"
+                                          id="idContactAddSL" onChange="validateCharacterAdrress(this);"
+                                          onKeyDown="validateCharacterAdrress(this); convertToUpperCase(this,'0',event);"
+                                          onKeyUp="validateCharacterAdrress(this); convertToUpperCase(this,'0',event); countTextCharacter(document.form1.contactAddSL,document.form1.remLen2,90);"
+                                          oninput="limitInput(this);">
+    </textarea>
+        <input readonly type="text" name="remLen2" size="3" maxlength="3" value="90" class="inner_text_1"> <br>
+        <span class="error"> </span></td>
+    <td width="60" height="28" valign="top">&nbsp;</td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+    <td align="center" valign="top">
+        <table width="562" border="0" cellpadding="0" cellspacing="5">
+
+            
+
+            <tr>
+                <td>
+                    <table width="555" border="0" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td width="169" height="30" align="center" valign="middle" class="body_text_th">&nbsp;</td>
+                            <td width="125" align="center" valign="middle" class="body_text_th">&nbsp;</td>
+                            <td width="268" align="center" valign="middle" class="body_text_th"><span
+                                    class="body_text_th">
+                                                        <input name="next" type="button" class="inner_text_1"
+                                                               value="Next"
+                                                               onclick="validateGroupForm1(this);"/>
+                                                        </span></td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>
+</table>
+</form>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+
+</td>
+</tr>
+</tbody>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
+</body>
+
+</html>
