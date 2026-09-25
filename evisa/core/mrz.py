@@ -6,6 +6,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 TD3_LINE_LENGTH = 44
 _WEIGHTS = (7, 3, 1)
@@ -109,6 +110,19 @@ def build_td3(
     return TD3(line1, line2)
 
 
+class MRZError(ValueError):
+    pass
+
+
+def _mrz_to_date(yymmdd: str, *, future: bool) -> date:
+    """Expiry dates are always 20xx; birth dates are the most recent past century."""
+    yy, mm, dd = int(yymmdd[:2]), int(yymmdd[2:4]), int(yymmdd[4:6])
+    if future:
+        return date(2000 + yy, mm, dd)
+    century = 1900 if yy > date.today().year % 100 else 2000
+    return date(century + yy, mm, dd)
+
+
 @dataclass(frozen=True)
 class ParsedTD3:
     document_type: str
@@ -123,10 +137,37 @@ class ParsedTD3:
     personal_number: str
     checks_ok: bool
 
+    @property
+    def date_of_birth(self) -> date:
+        return _mrz_to_date(self.birth_yymmdd, future=False)
 
-def parse_td3(line1: str, line2: str) -> ParsedTD3:
+    @property
+    def date_of_expiry(self) -> date:
+        return _mrz_to_date(self.expiry_yymmdd, future=True)
+
+    def passport_fields(self) -> dict[str, object]:
+        """Values for `models.Passport` (names title-cased)."""
+        return {
+            "document_type": self.document_type or "P",
+            "issuing_country": "DEU" if self.issuing_country == "D" else self.issuing_country,
+            "surname": self.surname.title(),
+            "given_names": self.given_names.title(),
+            "number": self.number,
+            "nationality": "DEU" if self.nationality == "D" else self.nationality,
+            "date_of_birth": self.date_of_birth,
+            "sex": self.sex if self.sex in ("M", "F") else "X",
+            "date_of_expiry": self.date_of_expiry,
+            "personal_number": self.personal_number,
+        }
+
+
+def parse_td3(line1: str, line2: str, *, strict: bool = False) -> ParsedTD3:
+    """Parse a passport MRZ. `strict` raises MRZError when a check digit is wrong."""
+    line1, line2 = line1.strip().upper(), line2.strip().upper()
     if len(line1) != TD3_LINE_LENGTH or len(line2) != TD3_LINE_LENGTH:
-        raise ValueError("TD3 lines must be 44 characters")
+        raise MRZError("TD3 lines must be 44 characters")
+    if not line1.startswith("P"):
+        raise MRZError("not a passport MRZ (line 1 must start with 'P')")
     names = line1[5:44].split("<<", 1)
     surname = names[0].replace("<", " ").strip()
     given = names[1].replace("<", " ").strip() if len(names) > 1 else ""
@@ -138,6 +179,8 @@ def parse_td3(line1: str, line2: str) -> ParsedTD3:
         (line2[42] == "<" and not personal.strip("<")) or check_digit(personal) == line2[42],
         check_digit(line2[0:10] + line2[13:20] + line2[21:43]) == line2[43],
     ]
+    if strict and not all(checks):
+        raise MRZError("MRZ check digit mismatch")
     return ParsedTD3(
         document_type=line1[0:2].rstrip("<"),
         issuing_country=line1[2:5].rstrip("<"),
@@ -151,3 +194,25 @@ def parse_td3(line1: str, line2: str) -> ParsedTD3:
         personal_number=personal.rstrip("<"),
         checks_ok=all(checks),
     )
+
+
+def find_td3(text: str) -> tuple[str, str] | None:
+    """Find a TD3 line pair in free text (pasted MRZ, OCR output)."""
+    lines = [re.sub(r"\s", "", ln).upper() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+    for first, second in zip(lines, lines[1:]):
+        if first.startswith("P") and len(first) == TD3_LINE_LENGTH and len(second) == TD3_LINE_LENGTH:
+            return first, second
+    return None
+
+
+def ocr_mrz(image_path: Path) -> str:
+    """OCR the MRZ band of a passport scan. Needs `pip install pytesseract` and the tesseract binary."""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise MRZError("reading the MRZ from an image needs `pip install pytesseract` and tesseract") from exc
+    with Image.open(image_path) as img:
+        band = img.crop((0, int(img.height * 0.7), img.width, img.height))
+        return pytesseract.image_to_string(band, config="--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")

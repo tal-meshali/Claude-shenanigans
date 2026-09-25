@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import countries
-from .mrz import TD3, build_td3
+from .mrz import TD3, build_td3, find_td3, ocr_mrz, parse_td3
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")
@@ -72,21 +72,52 @@ class Purpose(str, Enum):
         return self.value.replace("_", " ").capitalize()
 
 
+class Transport(str, Enum):
+    AIR = "air"
+    SEA = "sea"
+    LAND = "land"
+
+
 class Passport(_Model):
+    """Passport data page. Give the fields one by one, or `mrz` (the two
+    `P<...` lines) and only what the MRZ does not carry (issue date, place
+    of birth, ...); explicit fields win over the MRZ."""
+
     number: str
     document_type: str = "P"
-    issuing_country: str
+    issuing_country: str = ""
     nationality: str
     surname: str
     given_names: str
     sex: Sex
     date_of_birth: date
-    place_of_birth: str
-    country_of_birth: str
+    place_of_birth: str = ""
+    country_of_birth: str = ""
     date_of_issue: date
     date_of_expiry: date
-    issuing_authority: str
+    issuing_authority: str = ""
     personal_number: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_mrz(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        mrz_text = data.pop("mrz", None)
+        if mrz_text:
+            pair = find_td3(mrz_text)
+            if not pair:
+                raise ValueError("mrz: no passport (TD3) MRZ found in the given text")
+            for key, value in parse_td3(*pair, strict=True).passport_fields().items():
+                if value not in ("", None):
+                    data.setdefault(key, value)
+        if data.get("nationality"):
+            data.setdefault("issuing_country", data["nationality"])
+            data.setdefault("country_of_birth", data["nationality"])
+            data["issuing_country"] = data["issuing_country"] or data["nationality"]
+            data["country_of_birth"] = data["country_of_birth"] or data["nationality"]
+        return data
 
     _codes = field_validator("issuing_country", "nationality", "country_of_birth")(_country_code)
 
@@ -210,10 +241,13 @@ class Host(_Model):
 
 
 class Trip(_Model):
+    """Give `departure_date`, or `duration_days` (nights) and it is computed."""
+
     purpose: Purpose = Purpose.TOURISM
     arrival_date: date
     departure_date: date
-    port_of_entry: str
+    transport: Transport = Transport.AIR
+    port_of_entry: str = ""
     port_of_exit: str = ""
     arrival_flight: str = ""
     carrier: str = ""
@@ -225,6 +259,16 @@ class Trip(_Model):
 
     _code = field_validator("departure_country")(_country_code)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _duration(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "duration_days" in data:
+            data = dict(data)
+            days = int(data.pop("duration_days"))
+            if "departure_date" not in data and "arrival_date" in data:
+                data["departure_date"] = date.fromisoformat(str(data["arrival_date"])) + timedelta(days=days)
+        return data
+
     @model_validator(mode="after")
     def _dates(self) -> "Trip":
         if self.departure_date < self.arrival_date:
@@ -233,13 +277,15 @@ class Trip(_Model):
 
     @property
     def duration_days(self) -> int:
-        return (self.departure_date - self.arrival_date).days + 1
+        """Length of stay in days (nights), at least 1."""
+        return max(1, (self.departure_date - self.arrival_date).days)
 
 
 class Applicant(_Model):
     ref: str = ""
+    title: str = Field(default="", description="Mr/Mrs/Ms/Master/Miss; derived from sex, age and marital status if empty")
     passport: Passport
-    contact: Contact
+    contact: Contact | None = Field(default=None, description="Defaults to the batch-level contact")
     occupation: str
     marital_status: MaritalStatus = MaritalStatus.SINGLE
     father_name: str = ""
@@ -264,6 +310,18 @@ class Applicant(_Model):
         dob = self.passport.date_of_birth
         return day.year - dob.year - ((day.month, day.day) < (dob.month, dob.day))
 
+    def resolved_title(self, on: date | None = None) -> str:
+        if self.title:
+            return self.title
+        adult = self.age_on(on or date.today()) >= 18
+        if self.passport.sex is Sex.MALE:
+            return "Mr" if adult else "Master"
+        if self.passport.sex is Sex.FEMALE:
+            if not adult:
+                return "Miss"
+            return "Mrs" if self.marital_status in (MaritalStatus.MARRIED, MaritalStatus.WIDOWED) else "Ms"
+        return "Mx"
+
     def extra_for(self, site: str) -> dict[str, Any]:
         return self.extra.get(site, {})
 
@@ -273,15 +331,23 @@ class ApplicationBatch(_Model):
 
     country: str = Field(description="Registered site key, e.g. 'tanzania'")
     trip: Trip
+    contact: Contact | None = Field(default=None, description="Used for applicants without their own contact")
     applicants: list[Applicant] = Field(min_length=1)
+    mode: Literal["group", "individual"] | None = Field(
+        default=None, description="One group application or one per applicant; default: the site's preference")
     extra: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _unique_refs(self) -> "ApplicationBatch":
+    def _check(self) -> "ApplicationBatch":
         refs = [a.ref for a in self.applicants]
         dupes = {r for r in refs if refs.count(r) > 1}
         if dupes:
             raise ValueError(f"duplicate applicant refs: {sorted(dupes)}")
+        for applicant in self.applicants:
+            if applicant.contact is None:
+                if self.contact is None:
+                    raise ValueError(f"{applicant.ref}: no contact details (set applicant.contact or batch contact)")
+                applicant.contact = self.contact.model_copy(deep=True)
         return self
 
     def trip_for(self, applicant: Applicant) -> Trip:
@@ -298,11 +364,31 @@ class ApplicationBatch(_Model):
         return any(a.mock for a in self.applicants)
 
 
+def _read_structured(path: Path) -> Any:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() in (".yaml", ".yml"):
+        import yaml
+
+        return yaml.safe_load(text)
+    return json.loads(text)
+
+
 def load_batch(path: str | Path) -> ApplicationBatch:
-    """Load a batch JSON file; document paths are resolved relative to it."""
+    """Load a batch (JSON or YAML). Document paths are relative to the file.
+
+    An applicant with `read_mrz_from_image: true` gets its passport MRZ read
+    (OCR) from `documents.passport_scan`.
+    """
     path = Path(path)
-    batch = ApplicationBatch.model_validate(json.loads(path.read_text(encoding="utf-8")))
     base = path.parent.resolve()
+    raw = _read_structured(path)
+    for applicant in raw.get("applicants", []):
+        if applicant.pop("read_mrz_from_image", False):
+            scan = (applicant.get("documents") or {}).get("passport_scan")
+            if not scan:
+                raise ValueError("read_mrz_from_image needs documents.passport_scan")
+            applicant.setdefault("passport", {}).setdefault("mrz", ocr_mrz(base / scan))
+    batch = ApplicationBatch.model_validate(raw)
     for applicant in batch.applicants:
         applicant.documents = applicant.documents.resolved(base)
     return batch
@@ -312,12 +398,12 @@ def load_batch(path: str | Path) -> ApplicationBatch:
 
 
 class ApplicationStatus(str, Enum):
-    AWAITING_PAYMENT = "awaiting_payment"
+    AWAITING_PAYMENT = "awaiting_payment"  # submitted; payment link returned
     PAID = "paid"
-    PAYMENT_FAILED = "payment_failed"
-    STOPPED = "stopped"
+    PAYMENT_DECLINED = "payment_declined"
+    PAYMENT_UNCONFIRMED = "payment_unconfirmed"  # no verdict seen: check the bank before retrying
+    STOPPED = "stopped"  # dry run: stopped before submitting
     FAILED = "failed"
-    SKIPPED = "skipped"
 
 
 class Money(_Model):
@@ -338,11 +424,22 @@ class PaymentLink(_Model):
     instructions: str = ""
 
 
+class PaymentStatus(str, Enum):
+    PAID = "paid"
+    DECLINED = "declined"
+    UNCONFIRMED = "unconfirmed"  # submitted to the bank but no verdict seen
+    NOT_AUTHORISED = "not_authorised"  # the person declined the charge; nothing was submitted
+
+
 class PaymentOutcome(_Model):
-    success: bool
+    status: PaymentStatus
     reference: str = ""
     message: str = ""
     amount: Money | None = None
+
+    @property
+    def success(self) -> bool:
+        return self.status is PaymentStatus.PAID
 
 
 class ApplicationResult(_Model):

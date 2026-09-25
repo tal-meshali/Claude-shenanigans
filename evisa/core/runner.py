@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from .browser import BrowserOptions, BrowserSession, HumanActionRequired
 from .captcha import CaptchaHandler, ManualCaptcha
 from .documents import generate_mock_documents
-from .models import Applicant, ApplicationBatch, ApplicationResult, ApplicationStatus, Money
+from .models import Applicant, ApplicationBatch, ApplicationResult, ApplicationStatus, Money, PaymentStatus
 from .payment import CardDetails, PaymentMode, confirm_charge, prompt_card, sum_money
 from .site import StepContext, VisaSite
 
@@ -23,6 +23,14 @@ log = logging.getLogger(__name__)
 
 class SafetyError(RuntimeError):
     pass
+
+
+_PAYMENT_STATUS = {
+    PaymentStatus.PAID: ApplicationStatus.PAID,
+    PaymentStatus.DECLINED: ApplicationStatus.PAYMENT_DECLINED,
+    PaymentStatus.UNCONFIRMED: ApplicationStatus.PAYMENT_UNCONFIRMED,
+    PaymentStatus.NOT_AUTHORISED: ApplicationStatus.AWAITING_PAYMENT,
+}
 
 
 class BatchValidationError(ValueError):
@@ -181,9 +189,9 @@ class BatchRunner:
                 ctx.notify("paying by card")
                 outcome = self.site.pay_by_card(ctx, card)
                 result.payment = outcome
-                result.status = ApplicationStatus.PAID if outcome.success else ApplicationStatus.PAYMENT_FAILED
+                result.status = _PAYMENT_STATUS[outcome.status]
                 if not outcome.success:
-                    result.error = outcome.message
+                    ctx.notify(f"payment {outcome.status.value}: {outcome.message}")
                     result.payment_link = self._safe_link(ctx)
             else:
                 result.payment_link = self.site.payment_link(ctx, open_checkout=self.options.capture_gateway_url)

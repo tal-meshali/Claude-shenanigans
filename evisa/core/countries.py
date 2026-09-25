@@ -7,6 +7,7 @@ ICAO/ISO alpha-3 code; this module turns a code into every name a portal might u
 
 from __future__ import annotations
 
+import gettext
 import re
 import unicodedata
 from functools import lru_cache
@@ -76,11 +77,27 @@ def country_name(code: str) -> str:
 
 
 @lru_cache(maxsize=None)
-def country_aliases(code: str) -> tuple[str, ...]:
-    """Every plausible label for a country, most specific first."""
+def _translator(language: str) -> gettext.NullTranslations:
+    return gettext.translation("iso3166-1", pycountry.LOCALES_DIR, languages=[language], fallback=True)
+
+
+@lru_cache(maxsize=None)
+def country_aliases(code: str, languages: tuple[str, ...] = ("en",)) -> tuple[str, ...]:
+    """Every plausible label for a country, most specific first.
+
+    `languages` adds the ISO 3166 names in those languages (e.g. ("fr", "en")
+    for a portal in French: "Allemagne", "États-Unis", ...).
+    """
     code = code.upper()
     names: list[str] = []
     country = pycountry.countries.get(alpha_3=code)
+    if country is not None:
+        for lang in languages:
+            if lang != "en":
+                localized = _translator(lang).gettext(country.name)
+                names.append(localized)
+                if "," in localized:  # "Tanzanie, République unie de" -> "Tanzanie"
+                    names.append(localized.split(",", 1)[0].strip())
     if country is not None:
         for attr in ("name", "common_name", "official_name"):
             value = getattr(country, attr, None)

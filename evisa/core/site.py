@@ -82,8 +82,12 @@ class VisaSite(ABC):
     production_hosts: ClassVar[frozenset[str]] = frozenset()
     document_requirements: ClassVar[tuple[DocumentRequirement, ...]] = ()
     min_passport_validity_months: ClassVar[int] = 6
-    # One application covers the whole batch (group application) or one each.
-    group_application: ClassVar[bool] = False
+    # Whether the portal can put several travellers in one application, and
+    # whether to do so when the batch does not say (`batch.mode`).
+    supports_group: ClassVar[bool] = False
+    prefers_group: ClassVar[bool] = False
+    # Languages of the portal's labels, for matching country names etc.
+    languages: ClassVar[tuple[str, ...]] = ("en",)
 
     def __init__(self, base_url: str | None = None, selector_overrides: dict[str, list[str]] | None = None):
         self.base_url = (base_url or self.default_base_url).rstrip("/")
@@ -99,13 +103,17 @@ class VisaSite(ABC):
     # ------------------------------------------------------------- planning
 
     def application_units(self, batch: ApplicationBatch) -> list[list[Applicant]]:
-        if self.group_application:
+        """Applicants grouped per application: everyone together, or one each."""
+        group = batch.mode == "group" if batch.mode else self.prefers_group
+        if group and self.supports_group and len(batch.applicants) > 1:
             return [list(batch.applicants)]
         return [[a] for a in batch.applicants]
 
     def validate(self, batch: ApplicationBatch) -> list[str]:
         """Problems that would make the portal reject an application."""
         problems: list[str] = []
+        if batch.mode == "group" and not self.supports_group:
+            problems.append(f"the {self.name} portal has no group applications; use mode: individual (one application each)")
         for applicant in batch.applicants:
             trip = batch.trip_for(applicant)
             needed_until = _add_months(trip.arrival_date, self.min_passport_validity_months)

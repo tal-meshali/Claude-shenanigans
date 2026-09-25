@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError, field_va
 
 from .browser import wait_for_human
 from .fields import Field, FieldKind, FormError, click, fill_field, find
-from .models import Address, Money
+from .models import Address, Money, PaymentStatus
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +168,35 @@ def confirm_charge(lines: Sequence[str], total: Money | None, *, input_fn: Calla
     return input_fn("Type 'pay' to authorise these charges: ").strip().lower() == "pay"
 
 
+_AMOUNT_PATTERNS = (
+    re.compile(r"(?P<cur>USD|US\$|EUR|GBP|LKR|TZS|\$|€|£)\s?(?P<num>\d[\d.,\s]*\d|\d)", re.I),
+    re.compile(r"(?P<num>\d[\d.,\s]*\d|\d)\s?(?P<cur>USD|US\$|EUR|GBP|LKR|TZS|\$|€|£)", re.I),
+)
+_CURRENCY = {"US$": "USD", "$": "USD", "€": "EUR", "£": "GBP"}
+
+
+def _parse_number(raw: str) -> Decimal:
+    raw = raw.replace(" ", "").replace("\u00a0", "")
+    if re.search(r",\d{2}$", raw) and "." not in raw[-3:]:  # 1.500,00 / 50,00
+        raw = raw.replace(".", "").replace(",", ".")
+    else:  # 1,500.00
+        raw = raw.replace(",", "")
+    return Decimal(raw)
+
+
+def find_amount(text: str) -> Money | None:
+    """First money amount in page text: "USD 50.00", "$50", "150 USD", "50,00 USD"."""
+    for pattern in _AMOUNT_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            cur = match.group("cur").upper()
+            try:
+                return Money(amount=_parse_number(match.group("num")), currency=_CURRENCY.get(cur, cur))
+            except ArithmeticError:
+                continue
+    return None
+
+
 def sum_money(amounts: Sequence[Money | None]) -> Money | None:
     known = [m for m in amounts if m is not None]
     if not known or len({m.currency for m in known}) != 1:
@@ -260,9 +289,8 @@ def _frames(page: Page) -> list[Frame]:
 
 @dataclass
 class CheckoutResult:
-    success: bool
+    status: PaymentStatus
     message: str
-    reference: str = ""
 
 
 class CardCheckout:
@@ -328,10 +356,10 @@ def await_checkout(
     while time.monotonic() < deadline:
         try:
             if succeeded(page):
-                return CheckoutResult(True, "payment accepted")
+                return CheckoutResult(PaymentStatus.PAID, "payment accepted")
             reason = failed(page)
             if reason:
-                return CheckoutResult(False, reason)
+                return CheckoutResult(PaymentStatus.DECLINED, reason)
             if not challenged and three_ds_challenge_visible(page):
                 challenged = True
                 if challenge is not None:
@@ -349,7 +377,10 @@ def await_checkout(
             if "Target page, context or browser has been closed" in str(exc):
                 raise
         page.wait_for_timeout(500)
-    return CheckoutResult(False, "timed out waiting for the payment result")
+    return CheckoutResult(
+        PaymentStatus.UNCONFIRMED,
+        "no payment result seen before the timeout - check with your bank before paying again",
+    )
 
 
 def open_external_checkout(page: Page, click_pay: Callable[[], None], *, timeout_ms: int = 30_000) -> Page:

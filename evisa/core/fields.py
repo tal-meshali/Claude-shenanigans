@@ -9,8 +9,10 @@ be overridden per field from a JSON file without touching code.
 Locator mini-language:
     label=Surname           exact accessible label
     label~=Surname          label contains text
+    label/=^(Nom|Surname)   label matches a case-insensitive regex (handy for bilingual portals)
     placeholder=Surname     exact placeholder
     role=button:Save        ARIA role + accessible name (substring)
+    button/=^(Next|Suivant) a button OR link whose name matches the regex
     text=Save and Continue  visible text (substring)
     anything else           CSS / XPath passed to page.locator()
 """
@@ -103,6 +105,11 @@ def _page_of(scope: Scope) -> Page:
 
 
 def locate(scope: Scope, spec: str) -> Locator:
+    if spec.startswith("label/="):
+        return scope.get_by_label(re.compile(spec[7:], re.I))
+    if spec.startswith("button/="):
+        rx = re.compile(spec[8:], re.I)
+        return scope.get_by_role("button", name=rx).or_(scope.get_by_role("link", name=rx))
     if spec.startswith("label="):
         return scope.get_by_label(spec[6:], exact=True)
     if spec.startswith("label~="):
@@ -354,8 +361,8 @@ def normalized_equals(a: str, b: str) -> bool:
 
 
 VALIDATION_ERROR_SELECTORS = (
-    ".field-validation-error", ".validation-summary-errors li", ".invalid-feedback", ".text-danger",
-    ".alert-danger", ".error-message", "[role='alert']",
+    ".field-validation-error", ".validation-summary-errors li", ".invalid-feedback", ".alert-danger",
+    ".error-message", ".errorMessage", "#errorMsg", ".error", "[role='alert']",
 )
 
 
@@ -367,25 +374,57 @@ def visible_errors(scope: Scope) -> list[str]:
             item = loc.nth(i)
             if item.is_visible():
                 text = item.inner_text().strip()
-                if text and text not in messages:
+                # Skip required-field asterisks and other decoration.
+                if len(re.sub(r"\W", "", text)) >= 3 and text not in messages:
                     messages.append(text)
     return messages
 
 
-def submit_and_verify(page: Page, buttons: Sequence[str], *, arrived: Callable[[], bool], what: str, timeout_ms: int = 20_000) -> None:
-    """Click the step's submit button; wait until `arrived()` or raise with the portal's validation messages."""
+_NAV_FLAG = "__evisaBeforeSubmit"
+
+
+def submit_and_verify(
+    page: Page,
+    buttons: Sequence[str],
+    *,
+    what: str,
+    arrived: Callable[[], bool] | None = None,
+    timeout_ms: int = 20_000,
+) -> None:
+    """Click a step's submit button and make sure the portal accepted it.
+
+    Success is `arrived()` if given, otherwise "a new document loaded and it
+    shows no validation errors". Validation messages on the page are raised
+    as a FormError so the run log says exactly what the portal disliked.
+    """
+    page.evaluate(f"window.{_NAV_FLAG} = true")
+
+    def navigated() -> bool:
+        return not page.evaluate(f"!!window.{_NAV_FLAG}")
+
     click(page, buttons, what=f"{what} submit button")
     waited = 0
     while waited < timeout_ms:
         try:
-            if arrived():
+            if arrived is not None and arrived():
                 return
+            if arrived is None and navigated():
+                page.wait_for_load_state()
+                errors = visible_errors(page)
+                if errors:
+                    raise FormError(f"{what}: portal rejected the form: " + " | ".join(errors))
+                return
+        except FormError:
+            raise
         except Exception:  # noqa: BLE001 - page mid-navigation
             pass
         page.wait_for_timeout(250)
         waited += 250
         if waited % 1000 == 0:
-            errors = visible_errors(page)
+            try:
+                errors = visible_errors(page)
+            except Exception:  # noqa: BLE001
+                errors = []
             if errors:
                 raise FormError(f"{what}: portal rejected the form: " + " | ".join(errors))
     errors = visible_errors(page)

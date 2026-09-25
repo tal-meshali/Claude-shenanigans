@@ -27,13 +27,13 @@ from functools import partial
 from playwright.sync_api import Page
 
 from ...core import countries
-from ...core.browser import host_of
+from ...core.checkout import ResultPatterns, capture_checkout_url, pay_by_card
 from ...core.documents import DocumentRequirement
 from ...core.fields import (
     Choice, Field, FieldKind, FieldNotFound, FormError, choose_option, click, fill_form, find, read_options, submit_and_verify,
 )
 from ...core.models import Applicant, Money, PaymentLink, PaymentOutcome, Trip
-from ...core.payment import CardCheckout, CardDetails, await_checkout, open_external_checkout
+from ...core.payment import CardDetails, find_amount, open_external_checkout
 from ...core.site import Step, StepContext, VisaSite
 from . import data
 
@@ -46,10 +46,12 @@ SAVE_AND_CONTINUE = (
 )
 
 APPLICATION_ID_RE = re.compile(r"Application\s*(?:ID|No\.?|Number|Reference)\s*(?:is)?\s*[:#]?\s*([A-Z0-9][A-Z0-9/-]{5,})", re.I)
-AMOUNT_RE = re.compile(r"(?:USD|US\$|\$)\s*([\d,]+(?:\.\d{1,2})?)", re.I)
-PAID_RE = re.compile(r"payment\s+(?:was\s+|has\s+been\s+)?(?:successful|received|completed|confirmed)|payment\s+status\s*:?\s*paid|successfully\s+paid", re.I)
-DECLINED_RE = re.compile(r"(declined|payment\s+failed|transaction\s+failed|unsuccessful|could not be processed|insufficient funds)", re.I)
-RECEIPT_RE = re.compile(r"(?:receipt|reference|transaction)\s*(?:no\.?|number|id)?\s*[:#]\s*([A-Z0-9-]{6,})", re.I)
+RESULT_PATTERNS = ResultPatterns(
+    paid=re.compile(r"payment\s+(?:was\s+|has\s+been\s+)?(?:successful|received|completed|confirmed)"
+                    r"|payment\s+status\s*:?\s*paid|successfully\s+paid", re.I),
+    declined=re.compile(r"declined|payment\s+failed|transaction\s+failed|unsuccessful|could not be processed|insufficient funds", re.I),
+    receipt=re.compile(r"(?:receipt|reference|transaction)\s*(?:no\.?|number|id)?\s*[:#]\s*([A-Z0-9-]{6,})", re.I),
+)
 
 
 def _given(ctx: StepContext) -> str:
@@ -72,7 +74,7 @@ START_FIELDS = [
     Field("passport_number", T, PASSPORT_NUMBER, lambda c: c.applicant.passport.number),
     Field("passport_country", S, ("label~=Passport Issue Country", "label~=Passport Issuing Country", "label~=Country of Issue",
                                   "label~=Issuing Country", "select[name*='IssueCountry' i]", "select[name*='Country' i]"),
-          lambda c: list(countries.country_aliases(c.applicant.passport.issuing_country)), settle_ms=300),
+          lambda c: list(countries.country_aliases(c.applicant.passport.issuing_country, c.site.languages)), settle_ms=300),
     Field("security_answer", T, ("label~=Security Answer", "label=Answer", "[name*='SecurityAnswer' i]", "[name*='Answer' i]"),
           lambda c: c.state["security_answer"]),
 ]
@@ -92,10 +94,10 @@ PERSONAL_FIELDS = [
     Field("place_of_birth", T, ("label~=Place of Birth", "label~=City of Birth", "[name*='PlaceOfBirth' i]", "[name*='BirthPlace' i]"),
           lambda c: c.applicant.passport.place_of_birth),
     Field("country_of_birth", S, ("label~=Country of Birth", "select[name*='BirthCountry' i]", "select[name*='CountryOfBirth' i]"),
-          lambda c: list(countries.country_aliases(c.applicant.passport.country_of_birth)), **OPTIONAL),
+          lambda c: list(countries.country_aliases(c.applicant.passport.country_of_birth, c.site.languages)), **OPTIONAL),
     Field("nationality", S, ("label=Nationality", "label~=Current Nationality", "label~=Nationality", "label~=Citizenship",
                              "select[name*='Nationality' i]"),
-          lambda c: list(countries.country_aliases(c.applicant.passport.nationality)), settle_ms=300),
+          lambda c: list(countries.country_aliases(c.applicant.passport.nationality, c.site.languages)), settle_ms=300),
     Field("marital_status", S, ("label~=Marital Status", "select[name*='Marital' i]", "input[type='radio'][name*='Marital' i]"),
           lambda c: c.applicant.marital_status.label, **OPTIONAL),
     Field("occupation", S, ("label~=Occupation", "label~=Profession", "[name*='Occupation' i]", "[name*='Profession' i]"),
@@ -108,7 +110,7 @@ PERSONAL_FIELDS = [
                                      "[name*='ResidentialAddress' i]", "[name*='HomeAddress' i]"),
           lambda c: c.applicant.contact.address.one_line(), **OPTIONAL),
     Field("country_of_residence", S, ("label~=Country of Residence", "select[name*='Residence' i]"),
-          lambda c: list(countries.country_aliases(c.applicant.contact.address.country)), **OPTIONAL),
+          lambda c: list(countries.country_aliases(c.applicant.contact.address.country, c.site.languages)), **OPTIONAL),
     Field("passport_type", S, ("label~=Passport Type", "label~=Type of Passport", "select[name*='PassportType' i]"),
           ["Ordinary", "Regular", "Normal", "P"], **OPTIONAL),
     Field("passport_issue_date", D, ("label~=Date of Issue", "label~=Issue Date", "label~=Issued Date", "[name*='IssueDate' i]",
@@ -142,7 +144,7 @@ TRAVEL_FIELDS = [
           lambda c: data.port_labels(c.trip.port_of_exit or c.trip.port_of_entry), **OPTIONAL),
     Field("departure_country", S, ("label~=Travelling From", "label~=Country of Departure", "label~=Coming From",
                                    "label~=Country of Embarkation", "select[name*='DepartureCountry' i]", "select[name*='FromCountry' i]"),
-          lambda c: list(countries.country_aliases(c.trip.departure_country)), **OPTIONAL),
+          lambda c: list(countries.country_aliases(c.trip.departure_country, c.site.languages)), **OPTIONAL),
     Field("carrier", T, ("label~=Airline", "label~=Carrier", "label~=Means of Transport", "[name*='Airline' i]", "[name*='Carrier' i]"),
           lambda c: c.trip.carrier, **OPTIONAL),
     Field("flight", T, ("label~=Flight Number", "label~=Flight No", "label~=Vessel", "[name*='Flight' i]"),
@@ -183,11 +185,11 @@ PAY_BUTTONS = ("role=button:Pay Now", "role=button:Make Payment", "role=button:P
                "role=button:Pay", "input[type='submit'][value*='Pay' i]")
 
 TAB_MARKERS = {
-    "personal": ("label~=Surname", "label~=Last Name", "text=Personal Information", "[name*='Surname' i]"),
+    "personal": ("label~=Surname", "label~=Last Name", "[name*='Surname' i]"),
     "travel": ("label~=Port of Entry", "label~=Visa Type", "label~=Arrival Date"),
     "attachments": ("input[type='file']",),
     "declaration": DECLARATION_CHECKBOX,
-    "payment": PAY_BUTTONS + ("text=Payment Details", "text=Amount"),
+    "payment": PAY_BUTTONS + PAYMENT_METHOD,
 }
 
 
@@ -215,6 +217,10 @@ class TanzaniaSite(VisaSite):
         problems = super().validate(batch)
         for applicant in batch.applicants:
             trip = batch.trip_for(applicant)
+            if not applicant.passport.place_of_birth:
+                problems.append(f"{applicant.ref}: passport.place_of_birth is required by the Tanzania form")
+            if not trip.port_of_entry:
+                problems.append(f"{applicant.ref}: trip.port_of_entry is required (e.g. Kilimanjaro International Airport)")
             try:
                 vt = data.visa_type_for(applicant, trip)
             except ValueError as exc:
@@ -324,99 +330,31 @@ class TanzaniaSite(VisaSite):
 
     # ---------------------------------------------------------------- payment
 
-    def _portal_amount(self, page: Page) -> Money | None:
-        match = AMOUNT_RE.search(page.inner_text("body"))
-        if not match:
-            return None
-        return Money(amount=Decimal(match.group(1).replace(",", "")), currency="USD")
-
-    def _choose_card_method(self, ctx: StepContext) -> None:
+    def _open_checkout(self, ctx: StepContext) -> Page:
         method = Field("payment_method", S, PAYMENT_METHOD, CARD_METHOD_LABELS, required=False)
         fill_form(ctx.page, [method], ctx, overrides=self.overrides, timeout_ms=1_000)
-
-    def _open_checkout(self, ctx: StepContext) -> Page:
-        self._choose_card_method(ctx)
         return open_external_checkout(ctx.page, lambda: click(ctx.page, PAY_BUTTONS, what="pay button"))
 
-    def _resume_details(self, ctx: StepContext) -> dict[str, str]:
-        return {
-            "Application ID": ctx.result.application_id,
-            "Email": ctx.applicant.contact.email,
-            "Security question": ctx.state.get("security_question", ""),
-            "Security answer": ctx.state.get("security_answer", ""),
-        }
-
     def payment_link(self, ctx: StepContext, *, open_checkout: bool) -> PaymentLink:
-        page = ctx.page
-        amount = self._portal_amount(page) or ctx.result.fee
-        gateway_url = ""
-        if open_checkout:
-            portal_host = host_of(self.base_url)
-            try:
-                checkout = self._open_checkout(ctx)
-                if host_of(checkout.url) != portal_host:
-                    gateway_url = checkout.url
-                else:  # checkout embedded as an iframe
-                    gateway_url = next((fr.url for fr in checkout.frames if host_of(fr.url) not in ("", portal_host)), "")
-                ctx.screenshot("checkout-page")
-            except (FormError, TimeoutError) as exc:
-                ctx.notify(f"could not open the checkout page ({exc}); returning the portal link only")
+        amount = find_amount(ctx.page.inner_text("body")) or ctx.result.fee
         return PaymentLink(
             portal_url=self.url("/continueapplication?ReturnUrl=/payment"),
-            gateway_url=gateway_url,
+            gateway_url=capture_checkout_url(ctx, lambda: self._open_checkout(ctx)) if open_checkout else "",
             amount=amount,
-            resume=self._resume_details(ctx),
+            resume={
+                "Application ID": ctx.result.application_id,
+                "Email": ctx.applicant.contact.email,
+                "Security question": ctx.state.get("security_question", ""),
+                "Security answer": ctx.state.get("security_answer", ""),
+            },
             instructions="Open the portal link, sign in with the details above, choose Visa/Mastercard and pay. "
                          "The checkout link is a live payment session and can expire; the portal link always works.",
         )
 
     def pay_by_card(self, ctx: StepContext, card: CardDetails) -> PaymentOutcome:
-        portal = ctx.page
-        amount = self._portal_amount(portal) or ctx.result.fee
-        expected = ctx.result.fee
-        if amount and expected and amount.amount != expected.amount:
-            if not ctx.options.confirm([f"The portal asks {amount} for {ctx.applicant.full_name} (expected {expected})"], amount):
-                return PaymentOutcome(success=False, message=f"not paid: portal amount {amount} differs from expected {expected}", amount=amount)
-
-        payment_tab_url = portal.url
-        checkout = self._open_checkout(ctx)
-        pages = [checkout, portal] if checkout is not portal else [portal]
-
-        def text_of(p: Page) -> str:
-            try:
-                return p.inner_text("body")
-            except Exception:  # noqa: BLE001 - closed or navigating
-                return ""
-
-        def result_pages() -> list[Page]:
-            # The untouched payment tab may mention "paid"/"unsuccessful" in its
-            # instructions; only the checkout and pages it led to carry a verdict.
-            return [p for p in pages if not p.is_closed() and (p is checkout or p.url != payment_tab_url)]
-
-        def succeeded(_: Page) -> bool:
-            return any(host_of(p.url) == host_of(self.base_url) and PAID_RE.search(text_of(p)) for p in result_pages())
-
-        def failed(_: Page) -> str | None:
-            for p in result_pages():
-                m = DECLINED_RE.search(text_of(p))
-                if m:
-                    return f"payment {m.group(1).lower()}"
-            return None
-
-        # Card digits are on screen from here on: no screenshots unless the
-        # payment went through and the checkout navigated away.
-        ctx.sensitive = True
-        filler = CardCheckout(overrides=self.overrides)
-        filler.fill(checkout, card)
-        filler.submit(checkout)
-        result = await_checkout(
-            checkout, succeeded=succeeded, failed=failed, challenge=ctx.options.three_ds,
-            headless=ctx.options.browser.headless, timeout_s=ctx.options.browser.human_timeout_s, notify=ctx.options.notify,
+        return pay_by_card(
+            ctx, card,
+            open_checkout=lambda: self._open_checkout(ctx),
+            patterns=RESULT_PATTERNS,
+            portal_amount=find_amount(ctx.page.inner_text("body")),
         )
-        if result.success:
-            ctx.sensitive = False
-
-        final = next((p for p in pages if not p.is_closed() and host_of(p.url) == host_of(self.base_url)), portal)
-        ctx.page = final
-        receipt = RECEIPT_RE.search(text_of(final))
-        return PaymentOutcome(success=result.success, reference=receipt.group(1) if receipt else "", message=result.message, amount=amount)
