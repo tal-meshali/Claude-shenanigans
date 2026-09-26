@@ -62,7 +62,9 @@ applicants:
   verified). With `read_mrz_from_image: true` the MRZ is OCR'd from
   `documents.passport_scan`; this needs `pip install .[ocr]` and tesseract.
 - **Uploads:** converted and recompressed to what the portal accepts. For example,
-  `.jpg` is renamed to `.jpeg`, and photos are kept under 500 KB for Tanzania.
+  `.jpg` is renamed to `.jpeg`, and photos are kept under 500 KB for Tanzania. This
+  conversion is tried before the run starts, so an unreadable image or an oversized
+  PDF is reported before anything is filed on the portal.
 - **Site-specific answers** go under `extra.<country>`:
   - Tanzania: `security_question`, `security_answer`, `visa_type`.
   - Sri Lanka: `questions: {QN1: no, ...}`.

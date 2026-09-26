@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
@@ -137,6 +138,21 @@ class VisaSite(ABC):
                 for req in self.required_documents(applicant, trip):
                     if getattr(applicant.documents, req.kind) is None:
                         problems.append(f"{applicant.ref}: missing document '{req.kind}' ({req.label})")
+                problems += self._document_problems(applicant)
+        return problems
+
+    def _document_problems(self, applicant: Applicant) -> list[str]:
+        """Convert every given document now: a bad file must fail before anything is filed on the portal."""
+        problems: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            for req in self.document_requirements:
+                source = getattr(applicant.documents, req.kind, None)
+                if source is None:
+                    continue
+                try:
+                    prepare_upload(source, req, Path(tmp))
+                except Exception as exc:  # noqa: BLE001 - unreadable image, oversized PDF, missing file, ...
+                    problems.append(f"{applicant.ref}: {req.kind}: {exc}")
         return problems
 
     def required_documents(self, applicant: Applicant, trip: Trip) -> list[DocumentRequirement]:

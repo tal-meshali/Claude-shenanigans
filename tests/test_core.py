@@ -161,3 +161,21 @@ def test_verbose_flag_is_accepted_before_or_after_the_subcommand():
     assert ap.parse_args(["-v", "apply", "b.yaml", "--live"]).verbose
     assert ap.parse_args(["apply", "b.yaml", "--live", "-v"]).verbose
     assert not ap.parse_args(["apply", "b.yaml"]).verbose
+
+
+def test_bad_documents_fail_validation_before_the_portal_is_touched(tmp_path, tanzania_batch):
+    applicant = tanzania_batch.applicants[0]
+    applicant.mock = False
+    scan, photo, ticket = tmp_path / "scan.jpg", tmp_path / "photo.jpg", tmp_path / "ticket.pdf"
+    Image.new("RGB", (600, 400), "white").save(scan)
+    Image.new("RGB", (400, 500), "white").save(photo)
+    ticket.write_bytes(b"%PDF-1.4\n" + b"0" * (1100 * 1024))  # over the 1 MB limit; PDFs are not recompressed
+    applicant.documents = applicant.documents.model_copy(update={
+        "passport_scan": scan, "photo": photo, "return_ticket": ticket, "accommodation_proof": tmp_path / "missing.pdf"})
+    tanzania_batch.applicants = [applicant]
+
+    problems = get_site("tanzania").validate(tanzania_batch)
+
+    assert any("return_ticket" in p and "larger than 1024 KB" in p for p in problems), problems
+    assert any("accommodation_proof" in p and "file not found" in p for p in problems), problems
+    assert not any("passport_scan" in p or "photo" in p for p in problems), problems
