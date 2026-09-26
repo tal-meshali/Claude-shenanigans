@@ -59,6 +59,16 @@ class StepContext:
         except Exception as exc:  # noqa: BLE001 - screenshots are best effort
             log.debug("screenshot failed: %s", exc)
 
+    def save_html(self, name: str) -> None:
+        """Page source, for calibrating locators; never while card data is on screen."""
+        if self.sensitive:
+            return
+        try:
+            html = self.page.content()
+            (self.workdir / f"{name}.html").write_text(f"<!-- {self.page.url} -->\n{html}", encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001 - best effort, like screenshots
+            log.debug("saving page HTML failed: %s", exc)
+
     def notify(self, message: str) -> None:
         self.options.notify(f"[{self.result.applicant_ref}] {message}")
 

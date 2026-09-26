@@ -6,9 +6,11 @@ import logging
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Callable, Sequence
 
+from playwright.sync_api import Page
 from pydantic import BaseModel, Field
 
 from .browser import BrowserOptions, BrowserSession, HumanActionRequired
@@ -54,7 +56,10 @@ class RunOptions:
     stop_after: str | None = None
     screenshots: bool = True
     skip_validation: bool = False
-    notify: Callable[[str], None] = print
+    # Called on a failed application while its page is still open (--pause-on-error).
+    pause: Callable[[Page], None] | None = None
+    # Flushed, so progress and "ACTION NEEDED" show up at once even when stdout is a file.
+    notify: Callable[[str], None] = partial(print, flush=True)
 
     def captcha_handler(self) -> CaptchaHandler:
         return self.captcha or ManualCaptcha(headless=self.browser.headless, timeout_s=self.browser.human_timeout_s, notify=self.notify)
@@ -206,6 +211,9 @@ class BatchRunner:
             result.error = f"{type(exc).__name__}: {exc}"
             (ctx.workdir / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")
             ctx.screenshot("error")
+            ctx.save_html("error")
+            if self.options.pause:
+                self.options.pause(ctx.page)
         finally:
             result.finished_at = datetime.now()
             context.close()

@@ -32,6 +32,9 @@ Each run writes `runs/<country>-<timestamp>/` containing:
 - `report.json`: statuses, Application IDs, payment links and resume details.
 - `summary.md`
 - one screenshot per step.
+- for a failed application: `error.txt` (traceback), an `error` screenshot, and
+  `error.html` (the page source, for fixing locators). No screenshot or page source
+  is saved while card details are on screen.
 
 ## Batch file: one trip, many beneficiaries
 
@@ -107,6 +110,9 @@ python -m evisa apply my_family.yaml --live --headed --stop-after review   # Sri
     fields (read-only).
   - `--selectors overrides.json` (`{"surname": ["#LastName"]}`) fixes a field
     without code changes.
+  - `--pause-on-error` (with `--headed`) keeps a failed application's page open so
+    you can look at it. Press Enter in the terminal to continue; in a run without
+    a terminal (e.g. in the background), close that browser tab instead.
 
 ### What has been checked against the live portals (September 2026)
 

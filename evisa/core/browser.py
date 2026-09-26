@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -110,6 +111,25 @@ def wait_for_human(
             pass
         page.wait_for_timeout(int(poll_s * 1000))
     raise TimeoutError(f"timed out waiting for: {message}")
+
+
+def pause_for_inspection(page: Page) -> None:
+    """--pause-on-error: keep the failed page open until the person is done looking.
+
+    Waits for Enter when there is a terminal to press it in; otherwise (a
+    background run) until the person closes that browser tab.
+    """
+    if page.is_closed():
+        return
+    try:
+        page.bring_to_front()
+        if sys.stdin.isatty():
+            input(f"\n>>> Paused on the failed page ({page.url}). Inspect it in the browser, then press Enter here to continue... ")
+        else:
+            print(f"\n>>> Paused on the failed page ({page.url}). Close that browser tab to continue.", flush=True)
+            page.wait_for_event("close", timeout=0)
+    except Exception as exc:  # noqa: BLE001 - e.g. the whole browser was closed by hand
+        log.debug("pause ended: %s", exc)
 
 
 def is_loopback(url: str) -> bool:

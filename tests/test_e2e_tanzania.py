@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 from evisa.core.models import ApplicationStatus
-from evisa.core.payment import PaymentMode
+from evisa.core.payment import CardCheckout, PaymentMode
 from evisa.core.runner import SafetyError, run_batch
+from evisa.core.site import Step
 from evisa.mock.gateway import complete_mock_3ds
 from evisa.mock.tanzania import COUNTRY_BY_ID, VISA_TYPES
 from evisa.sites import get_site
@@ -87,3 +88,45 @@ def test_refusing_the_charge_submits_nothing(tmp_path, tanzania_env, tanzania_ba
     with pytest.raises(SafetyError):
         run_batch(get_site("tanzania", base_url=tanzania_env.base_url), tanzania_batch, opts)
     assert len(tanzania_env.portal.applications) == before
+
+
+def test_a_failed_step_saves_the_page_html_and_pauses_on_the_open_page(tmp_path, tanzania_env, tanzania_batch):
+    tanzania_batch.applicants = tanzania_batch.applicants[:1]
+    site = get_site("tanzania", base_url=tanzania_env.base_url)
+    start, personal, *_ = site.steps()
+
+    def locator_missed(ctx):
+        raise RuntimeError("field 'arrival_date' not found")
+
+    site.steps = lambda: [start, personal, Step("travel-information", locator_missed)]
+    paused = []
+    opts = options(tmp_path, pause=lambda page: paused.append((page.url, page.is_closed())))
+    report = run_batch(site, tanzania_batch, opts)
+    [result] = report.results
+
+    assert result.status is ApplicationStatus.FAILED and "arrival_date" in result.error
+    html = Path(report.run_dir) / result.applicant_ref / "error.html"
+    assert html.read_text().startswith(f"<!-- {tanzania_env.base_url}/")
+    assert "Tanzania eVisa (MOCK PORTAL)" in html.read_text()
+    assert paused == [(paused[0][0], False)] and paused[0][0].startswith(tanzania_env.base_url)
+
+
+def test_no_page_html_is_saved_while_card_data_is_on_screen(tmp_path, tanzania_env, tanzania_batch, monkeypatch):
+    tanzania_batch.applicants = tanzania_batch.applicants[:1]
+
+    def pay_button_missing(self, page):
+        raise RuntimeError("pay button not found")
+
+    monkeypatch.setattr(CardCheckout, "submit", pay_button_missing)  # fails after the card was typed in
+    opts = options(tmp_path, PaymentMode.CARD, card_provider=lambda a: card(), pause=lambda page: None)
+    report = run_batch(get_site("tanzania", base_url=tanzania_env.base_url), tanzania_batch, opts)
+    [result] = report.results
+
+    assert result.status is ApplicationStatus.FAILED and "pay button" in result.error
+    run_dir = Path(report.run_dir)
+    folder = run_dir / result.applicant_ref
+    assert (folder / "error.txt").exists() and not (folder / "error.html").exists()
+    assert not any("error" in Path(shot).name for shot in result.screenshots)
+    for f in run_dir.rglob("*"):
+        if f.is_file() and f.suffix in (".txt", ".html", ".json", ".md"):
+            assert "4111111111111111" not in f.read_text(), f

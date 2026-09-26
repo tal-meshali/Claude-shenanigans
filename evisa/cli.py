@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .core.browser import BrowserOptions
+from .core.browser import BrowserOptions, pause_for_inspection
 from .core.captcha import LoopbackCheckboxCaptcha
 from .core.documents import generate_mock_documents
 from .core.models import ApplicationStatus, load_batch
@@ -49,6 +49,7 @@ def _options(args: argparse.Namespace, **overrides) -> RunOptions:
         allow_production=getattr(args, "live", False),
         stop_after=args.stop_after,
         capture_gateway_url=not args.no_checkout_link,
+        pause=pause_for_inspection if args.pause_on_error else None,
     )
     for key, value in overrides.items():
         setattr(opts, key, value)
@@ -164,6 +165,8 @@ def _run_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--stop-after", metavar="STEP", help="dry run: stop after this step (e.g. 'declaration' or 'review')")
     p.add_argument("--no-checkout-link", action="store_true", help="in link mode, do not open the checkout to capture its URL")
     p.add_argument("--headed", action="store_true", help="show the browser (needed to solve CAPTCHAs / 3-D Secure yourself)")
+    p.add_argument("--pause-on-error", action="store_true",
+                   help="with --headed: when an application fails, keep its page open until you press Enter (or close the tab)")
     p.add_argument("--slow-mo", type=int, default=0, metavar="MS", help="delay between browser actions")
     p.add_argument("--out", default="runs", help="folder for reports and screenshots (default: runs/)")
 
@@ -215,7 +218,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    if getattr(args, "pause_on_error", False) and not args.headed:
+        ap.error("--pause-on-error needs --headed (there is no window to inspect otherwise)")
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     if args.verbose:
         logging.getLogger("evisa").setLevel(logging.DEBUG)
